@@ -16,29 +16,41 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
 
+  const [loading, setLoading] = useState(false);
+
   const redirectTo = location.state?.from?.pathname || "/dashboard";
 
-  function doLogin(u) {
-    login(u);
-    navigate(redirectTo, { replace: true });
+  async function doLogin(userOrUsername, pass, fallbackUser) {
+    setLoading(true);
+    setError("");
+    try {
+      if (typeof userOrUsername === "string") {
+        await login(userOrUsername, pass);
+      } else {
+        await login(userOrUsername);
+      }
+      navigate(redirectTo, { replace: true });
+    } catch (err) {
+      if (fallbackUser) {
+        console.warn("Backend login failed, using fallback:", err.message);
+        await login(fallbackUser);
+        navigate(redirectTo, { replace: true });
+      } else {
+        setError(err.message || "Invalid credentials. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     if (!username || !password) {
       setError("Please enter both username and password.");
       return;
     }
     const found = USERS.find((u) => u.username.toLowerCase() === username.toLowerCase());
-    if (!found) {
-      setError("No account found with that username. Try a quick-login below.");
-      return;
-    }
-    if (found.status !== "Active") {
-      setError("This account has been deactivated. Contact your administrator.");
-      return;
-    }
-    doLogin(found);
+    await doLogin(username, password, found);
   }
 
   return (
@@ -111,8 +123,8 @@ export default function LoginPage() {
                 Forgot Password?
               </button>
             </div>
-            <Btn type="submit" size="lg">
-              Login
+            <Btn type="submit" size="lg" disabled={loading}>
+              {loading ? "Signing in..." : "Login"}
             </Btn>
           </form>
 
@@ -121,16 +133,28 @@ export default function LoginPage() {
               QUICK DEMO LOGIN
             </p>
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => doLogin(USERS[0])} className="px-3 py-2.5 rounded-xl border text-xs font-semibold text-left hover:bg-slate-50" style={{ borderColor: T.border }}>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => doLogin("lavanya.admin", "admin123", USERS[0])}
+                className="px-3 py-2.5 rounded-xl border text-xs font-semibold text-left hover:bg-slate-50 transition-colors"
+                style={{ borderColor: T.border }}
+              >
                 <div style={{ color: T.navy }}>Admin</div>
                 <div className="font-normal mt-0.5" style={{ color: "#9AA6B2" }}>
                   Lavanya M
                 </div>
               </button>
-              <button onClick={() => doLogin(USERS[1])} className="px-3 py-2.5 rounded-xl border text-xs font-semibold text-left hover:bg-slate-50" style={{ borderColor: T.border }}>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => doLogin("rajan.pharmacist", "pharma123", USERS[1])}
+                className="px-3 py-2.5 rounded-xl border text-xs font-semibold text-left hover:bg-slate-50 transition-colors"
+                style={{ borderColor: T.border }}
+              >
                 <div style={{ color: T.navy }}>Pharmacist</div>
                 <div className="font-normal mt-0.5" style={{ color: "#9AA6B2" }}>
-                  R. Saravanan · Kovilpatti
+                  R. Rajan · Kovilpatti
                 </div>
               </button>
             </div>

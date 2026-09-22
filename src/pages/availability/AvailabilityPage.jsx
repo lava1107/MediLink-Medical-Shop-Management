@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { Search, Building2, PackageX, Store } from "lucide-react";
 import { useApp } from "../../hooks/useApp.js";
 import { useAuth } from "../../hooks/useAuth.js";
-import { BRANCHES } from "../../data/mockData.js";
 import {
   findMedicine,
   checkCurrentBranch,
@@ -26,13 +25,12 @@ import BranchAvailabilityCard from "../../components/availability/BranchAvailabi
 import PartnerShopCard from "../../components/availability/PartnerShopCard.jsx";
 import Modal from "../../components/common/Modal.jsx";
 import { FormInput, FormSelect } from "../../components/common/FormControls.jsx";
-import { CUSTOMERS } from "../../data/mockData.js";
 
 export default function AvailabilityPage() {
   const { user } = useAuth();
-  const { db, setDb, toast } = useApp();
-  const homeBranchName = user.role === "Admin" ? BRANCHES[0].name : user.branch;
-  const homeBranch = db.branches.find((b) => b.name === homeBranchName) || BRANCHES[0];
+  const { db, setDb, toast, refreshDb } = useApp();
+  const homeBranchName = user.role === "Admin" ? (db.branches?.[0]?.name || "Kovilpatti Main Branch") : user.branch;
+  const homeBranch = (db.branches || []).find((b) => b.name === homeBranchName) || db.branches?.[0] || { name: homeBranchName, lat: 9.1726, lng: 77.8687 };
 
   const [query, setQuery] = useState("");
   const [result, setResult] = useState(null);
@@ -63,7 +61,10 @@ export default function AvailabilityPage() {
     const nearbyBranches = homeBatch ? [] : await checkNearbyBranches(db.batches, db.branches, med.id, homeBranch, nextBranchRadius);
 
     // Level 3: nearby registered partner shops (centered on the CURRENT branch), only if unavailable in-network
-    const nearbyPartners = !homeBatch && nearbyBranches.length === 0 ? await checkNearbyPartnerShops(med.name, homeBranch, nextPartnerRadius) : [];
+    const nearbyPartners =
+      !homeBatch && nearbyBranches.length === 0
+        ? await checkNearbyPartnerShops(med.name, homeBranch, nextPartnerRadius, db.partnerShops, db.partnerAvailability)
+        : [];
 
     setResult({ med, homeBatch, nearbyBranches, nearbyPartners });
     setSearching(false);
@@ -99,6 +100,7 @@ export default function AvailabilityPage() {
     setDb((d) => ({ ...d, reservations: updated }));
     toast("Reservation created. This does not create a sale until the customer collects it.");
     setReserveTarget(null);
+    refreshDb?.();
   }
 
   return (
@@ -240,7 +242,7 @@ export default function AvailabilityPage() {
             </div>
             <FormSelect label="Customer" required value={reserveForm.customer} onChange={(e) => setReserveForm((f) => ({ ...f, customer: e.target.value }))}>
               <option value="">Select customer</option>
-              {CUSTOMERS.map((c) => (
+              {(db.customers || []).map((c) => (
                 <option key={c.id}>{c.name}</option>
               ))}
             </FormSelect>

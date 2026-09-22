@@ -1,9 +1,8 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Eye } from "lucide-react";
+import { Plus, Trash2, Eye, Pencil } from "lucide-react";
 import { useApp } from "../../hooks/useApp.js";
 import { useAuth } from "../../hooks/useAuth.js";
-import { BRANCHES, SUPPLIERS, MEDICINES } from "../../data/mockData.js";
-import { createPurchase } from "../../services/purchaseService.js";
+import { createPurchase, updatePurchase } from "../../services/purchaseService.js";
 import { formatCurrency } from "../../utils/format.js";
 import { T } from "../../utils/theme.js";
 import PageHeader from "../../components/common/PageHeader.jsx";
@@ -16,12 +15,49 @@ import { FormInput, FormSelect } from "../../components/common/FormControls.jsx"
 import EmptyState from "../../components/common/EmptyState.jsx";
 
 export default function PurchasesPage() {
-  const { db, setDb, toast } = useApp();
+  const { db, setDb, toast, refreshDb } = useApp();
   const { user } = useAuth();
   const [wizard, setWizard] = useState(false);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({ supplier: "", branch: "", items: [] });
   const [itemDraft, setItemDraft] = useState({ medicine: "", batchNo: "", mfgDate: "", expiryDate: "", qty: "", price: "", discount: 0, gst: 12 });
+  const [editModal, setEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({});
+
+  function openEdit(p) {
+    setEditForm({
+      id: p.id,
+      invoice: p.invoice || "",
+      supplier: p.supplier || "",
+      branch: p.branch || "",
+      purchasedBy: p.purchasedBy || "",
+      amount: p.amount || 0,
+      payment: p.payment || "Pending",
+      status: p.status || "Received",
+    });
+    setEditModal(true);
+  }
+
+  async function handleSaveEdit() {
+    try {
+      let updated;
+      try {
+        updated = await updatePurchase(editForm.id, editForm);
+      } catch (apiErr) {
+        console.warn("Backend unavailable, updating purchase locally:", apiErr.message);
+        updated = { ...editForm };
+      }
+      setDb((d) => ({
+        ...d,
+        purchases: d.purchases.map((p) => (p.id === editForm.id ? { ...p, ...updated } : p)),
+      }));
+      toast("Purchase updated successfully.");
+      setEditModal(false);
+      refreshDb?.();
+    } catch (err) {
+      toast(err.message || "Failed to update purchase.", "error");
+    }
+  }
 
   function resetWizard() {
     setWizard(false);
@@ -59,10 +95,14 @@ export default function PurchasesPage() {
       toast("Select supplier, branch and add at least one medicine.", "error");
       return;
     }
-    const result = await createPurchase(db, { ...form, grandTotal, paymentStatus, purchasedBy: user.name });
-    setDb((d) => ({ ...d, purchases: result.purchases, batches: result.batches }));
-    toast("Purchase saved and batches updated.");
-    resetWizard();
+    try {
+      const result = await createPurchase(db, { ...form, grandTotal, paymentStatus, purchasedBy: user.name });
+      setDb((d) => ({ ...d, purchases: result.purchases, batches: result.batches }));
+      toast("Purchase saved and batches updated.");
+      resetWizard();
+    } catch (err) {
+      toast(err.message || "Failed to record purchase.", "error");
+    }
   }
 
   return (
@@ -91,10 +131,14 @@ export default function PurchasesPage() {
         data={db.purchases}
         searchKeys={["invoice", "supplier", "branch"]}
         filters={[
-          { key: "branch", label: "Branch", options: BRANCHES.map((b) => b.name) },
+          { key: "branch", label: "Branch", options: db.branches.map((b) => b.name) },
           { key: "payment", label: "Payment", options: ["Paid", "Pending", "Partially Paid"] },
         ]}
-        actions={() => <IconBtn icon={Eye} tone="blue" />}
+        actions={(p) => (
+          <>
+            <IconBtn icon={Pencil} tone="blue" title="Edit Purchase" onClick={() => openEdit(p)} />
+          </>
+        )}
       />
 
       <Modal
@@ -142,14 +186,14 @@ export default function PurchasesPage() {
           <div className="grid grid-cols-2 gap-4">
             <FormSelect label="Supplier" required value={form.supplier} onChange={(e) => setForm((f) => ({ ...f, supplier: e.target.value }))}>
               <option value="">Select supplier</option>
-              {SUPPLIERS.map((s) => (
-                <option key={s.id}>{s.name}</option>
+              {db.suppliers.map((s) => (
+                <option key={s.id} value={s.name}>{s.name}</option>
               ))}
             </FormSelect>
             <FormSelect label="Branch" required value={form.branch} onChange={(e) => setForm((f) => ({ ...f, branch: e.target.value }))}>
               <option value="">Select branch</option>
-              {BRANCHES.map((b) => (
-                <option key={b.id}>{b.name}</option>
+              {db.branches.map((b) => (
+                <option key={b.id} value={b.name}>{b.name}</option>
               ))}
             </FormSelect>
           </div>
@@ -160,8 +204,8 @@ export default function PurchasesPage() {
               <div className="col-span-2">
                 <FormSelect label="Medicine" value={itemDraft.medicine} onChange={(e) => setItemDraft((d) => ({ ...d, medicine: e.target.value }))}>
                   <option value="">Select</option>
-                  {MEDICINES.map((m) => (
-                    <option key={m.id}>{m.name}</option>
+                  {db.medicines.map((m) => (
+                    <option key={m.id} value={m.name}>{m.name}</option>
                   ))}
                 </FormSelect>
               </div>
@@ -265,6 +309,49 @@ export default function PurchasesPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={editModal}
+        onClose={() => setEditModal(false)}
+        title={`Edit Purchase — ${editForm.invoice || editForm.id}`}
+        footer={
+          <>
+            <Btn variant="secondary" onClick={() => setEditModal(false)}>
+              Cancel
+            </Btn>
+            <Btn onClick={handleSaveEdit}>Update Purchase</Btn>
+          </>
+        }
+      >
+        <div className="grid grid-cols-2 gap-4">
+          <FormInput label="Invoice Number" required value={editForm.invoice || ""} onChange={(e) => setEditForm((f) => ({ ...f, invoice: e.target.value }))} />
+          <FormSelect label="Supplier" required value={editForm.supplier || ""} onChange={(e) => setEditForm((f) => ({ ...f, supplier: e.target.value }))}>
+            <option value="">Select supplier</option>
+            {db.suppliers.map((s) => (
+              <option key={s.id} value={s.name}>{s.name}</option>
+            ))}
+          </FormSelect>
+          <FormSelect label="Branch" required value={editForm.branch || ""} onChange={(e) => setEditForm((f) => ({ ...f, branch: e.target.value }))}>
+            {db.branches.map((b) => (
+              <option key={b.id} value={b.name}>{b.name}</option>
+            ))}
+          </FormSelect>
+          <FormInput label="Purchased By" value={editForm.purchasedBy || ""} onChange={(e) => setEditForm((f) => ({ ...f, purchasedBy: e.target.value }))} />
+          <FormInput label="Total Amount (₹)" type="number" min="0" value={editForm.amount || 0} onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))} />
+          <FormSelect label="Payment Status" value={editForm.payment || "Pending"} onChange={(e) => setEditForm((f) => ({ ...f, payment: e.target.value }))}>
+            <option>Paid</option>
+            <option>Pending</option>
+            <option>Partially Paid</option>
+          </FormSelect>
+          <div className="col-span-2">
+            <FormSelect label="Purchase Status" value={editForm.status || "Received"} onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value }))}>
+              <option>Received</option>
+              <option>Ordered</option>
+              <option>Cancelled</option>
+            </FormSelect>
+          </div>
+        </div>
       </Modal>
     </div>
   );

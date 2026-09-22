@@ -1,18 +1,25 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Receipt, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Receipt, ShoppingCart, Pencil } from "lucide-react";
 import { T } from "../../utils/theme.js";
 import { formatCurrency, formatDate } from "../../utils/format.js";
 import { useApp } from "../../hooks/useApp.js";
+import { updateCustomer } from "../../services/customerService.js";
 import PageHeader from "../../components/common/PageHeader.jsx";
 import StatCard from "../../components/common/StatCard.jsx";
 import StatusBadge from "../../components/common/StatusBadge.jsx";
+import Btn from "../../components/common/Btn.jsx";
+import Modal from "../../components/common/Modal.jsx";
+import { FormInput } from "../../components/common/FormControls.jsx";
 import EmptyState from "../../components/common/EmptyState.jsx";
 
 export default function CustomerDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { db } = useApp();
+  const { db, setDb, toast, refreshDb } = useApp();
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({});
+
   const c = db.customers.find((x) => x.id === id);
 
   if (!c) {
@@ -30,12 +37,77 @@ export default function CustomerDetailPage() {
   const reservations = db.reservations.filter((r) => r.customer === c.name);
   const totalSpend = purchases.reduce((a, s) => a + s.amount, 0);
 
+  function openEdit() {
+    setForm({
+      name: c.name || "",
+      phone: c.phone || "",
+      email: c.email || "",
+      address: c.address || "",
+      rxRef: c.rxRef || "-",
+    });
+    setModal(true);
+  }
+
+  async function handleSave() {
+    if (!form.name || !form.phone) {
+      toast("Name and phone number are required.", "error");
+      return;
+    }
+    try {
+      let updated;
+      try {
+        updated = await updateCustomer(c.id, form);
+      } catch (apiErr) {
+        console.warn("Backend unavailable, updating customer locally:", apiErr.message);
+        updated = { id: c.id, ...form };
+      }
+      setDb((d) => {
+        const oldName = c.name;
+        const newName = updated.name || form.name || oldName;
+
+        return {
+          ...d,
+          customers: d.customers.map((cust) => (cust.id === c.id ? { ...cust, ...updated } : cust)),
+          sales: (d.sales || []).map((s) =>
+            s.customerId === c.id || (oldName && s.customer === oldName)
+              ? { ...s, customer: newName, customerId: c.id }
+              : s
+          ),
+          prescriptions: (d.prescriptions || []).map((p) =>
+            p.customerId === c.id || (oldName && (p.customer === oldName || p.customerName === oldName))
+              ? { ...p, customer: newName, customerName: newName, customerId: c.id }
+              : p
+          ),
+          reservations: (d.reservations || []).map((r) =>
+            r.customerId === c.id || (oldName && r.customer === oldName)
+              ? { ...r, customer: newName, customerId: c.id }
+              : r
+          ),
+        };
+      });
+      toast("Customer updated successfully.");
+      setModal(false);
+      refreshDb?.();
+    } catch (err) {
+      toast(err.message || "Failed to update customer.", "error");
+    }
+  }
+
   return (
     <div>
       <button onClick={() => navigate("/customers")} className="flex items-center gap-1.5 text-xs font-semibold mb-4" style={{ color: T.blue }}>
         <ArrowLeft size={14} /> Back to Customers
       </button>
-      <PageHeader title={c.name} subtitle={c.phone} crumbs={["MediLink", "Customers", c.name]} />
+      <PageHeader
+        title={c.name}
+        subtitle={c.phone}
+        crumbs={["MediLink", "Customers", c.name]}
+        action={
+          <Btn icon={Pencil} size="sm" onClick={openEdit}>
+            Edit Customer
+          </Btn>
+        }
+      />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
         <div className="bg-white rounded-2xl border p-5" style={{ borderColor: T.border }}>
           <h3 className="font-bold text-sm mb-3" style={{ color: T.navy }}>

@@ -5,6 +5,8 @@ import { useAuth } from "../../hooks/useAuth.js";
 import { createSale } from "../../services/salesService.js";
 import { generateInvoicePdf } from "../../utils/invoicePdf.js";
 import { findPrescription, createPrescription, verifyPrescription, rejectPrescription } from "../../services/prescriptionService.js";
+import { createCustomer } from "../../services/customerService.js";
+import { medicineStock } from "../../services/medicineService.js";
 import { formatCurrency, pad } from "../../utils/format.js";
 import { T } from "../../utils/theme.js";
 import PageHeader from "../../components/common/PageHeader.jsx";
@@ -81,9 +83,12 @@ export default function POSPage() {
     setRxVerifyRecord(null);
   }
 
-  const branchBatches = db.batches.filter((b) => b.branchName === activeBranch && b.status !== "Expired" && b.available > 0);
-  const medOptions = db.medicines
-    .filter((m) => branchBatches.some((b) => b.medicineId === m.id))
+  const allAvailableBatches = (db.batches || []).filter(
+    (b) => b.status !== "Expired" && Number(b.available) > 0
+  );
+
+  const medOptions = (db.medicines || [])
+    .filter((m) => medicineStock(m, db.batches) > 0)
     .filter(
       (m) =>
         !search ||
@@ -93,9 +98,15 @@ export default function POSPage() {
     );
 
   function addToCart(med) {
-    const batch = branchBatches.filter((b) => b.medicineId === med.id).sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate))[0];
+    const medBatches = allAvailableBatches
+      .filter((b) => b.medicineId === med.id || b.medicine_id === med.id)
+      .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+
+    // Prefer batch at current branch if available, else pick earliest-expiry batch from any branch
+    const batch = medBatches.find((b) => b.branchName === activeBranch || b.branch_name === activeBranch) || medBatches[0];
+
     if (!batch) {
-      toast("No available (non-expired) batch for this medicine at this branch.", "error");
+      toast("No available (non-expired) batch for this medicine.", "error");
       return;
     }
     setCart((c) => {
@@ -107,7 +118,22 @@ export default function POSPage() {
         }
         return c.map((i) => (i.batchId === batch.id ? { ...i, qty: i.qty + 1 } : i));
       }
-      return [...c, { batchId: batch.id, medicineId: med.id, name: med.name, rx: med.rx, batchNo: batch.batchNo, price: batch.sellingPrice, gst: med.gst, qty: 1, maxQty: batch.available, discount: 0 }];
+      return [
+        ...c,
+        {
+          batchId: batch.id,
+          medicineId: med.id,
+          name: med.name,
+          rx: med.rx,
+          batchNo: batch.batchNo,
+          price: batch.sellingPrice || med.selling,
+          gst: med.gst,
+          qty: 1,
+          maxQty: batch.available,
+          discount: 0,
+          rack: batch.rack,
+        },
+      ];
     });
   }
   function updateQty(batchId, qty) {
@@ -134,17 +160,20 @@ export default function POSPage() {
 
   const customerResults = customerQuery ? db.customers.filter((c) => c.name.toLowerCase().includes(customerQuery.toLowerCase()) || c.phone.includes(customerQuery)) : [];
 
-  function createCustomerRecord() {
+  async function createCustomerRecord() {
     if (!newCustomer.name || !newCustomer.phone) {
       toast("Name and phone are required.", "error");
       return;
     }
-    const id = `CUS-${pad(db.customers.length + 1)}`;
-    const c = { id, ...newCustomer, email: "", rxRef: "-", created: "2026-08-20" };
-    setDb((d) => ({ ...d, customers: [...d.customers, c] }));
-    setCustomer(c);
-    setShowNewCustomer(false);
-    toast("Customer added.");
+    try {
+      const c = await createCustomer({ ...newCustomer, email: "", rxRef: "-" });
+      setDb((d) => ({ ...d, customers: [...d.customers, c] }));
+      setCustomer(c);
+      setShowNewCustomer(false);
+      toast("Customer added.");
+    } catch (err) {
+      toast(err.message || "Failed to add customer.", "error");
+    }
   }
 
   async function generateBill() {
@@ -156,52 +185,61 @@ export default function POSPage() {
       toast("One or more items require a verified prescription before billing.", "error");
       return;
     }
-    const result = await createSale(db, {
-      cart,
-      customerName: customer?.name,
-      branch: activeBranch,
-      pharmacistName: user.name,
-      payment,
-      grandTotal,
-    });
-    setDb((d) => ({ ...d, sales: result.sales, batches: result.batches }));
-    const newSale = result.sales[0];
-    toast(`Bill ${newSale.bill} generated successfully.`);
+    try {
+      const result = await createSale(db, {
+        cart,
+        customerName: customer?.name,
+        branch: activeBranch,
+        pharmacistName: user.name,
+        payment,
+        grandTotal,
+      });
+      setDb((d) => ({
+        ...d,
+        sales: result.sales,
+        batches: result.batches,
+        medicines: result.medicines || d.medicines,
+      }));
+      const newSale = result.sales[0];
+      toast(`Bill ${newSale.bill} generated successfully.`);
 
-    // Build a real, downloadable PDF invoice for this sale.
-    const branchObj = db.branches.find((b) => b.name === activeBranch);
-    const invoiceItems = cart.map((i) => {
-      const med = db.medicines.find((m) => m.id === i.medicineId);
-      const batch = db.batches.find((b) => b.id === i.batchId);
-      const lineSubtotal = i.price * i.qty;
-      const lineDiscount = (lineSubtotal * i.discount) / 100;
-      const lineGst = ((lineSubtotal - lineDiscount) * i.gst) / 100;
-      return {
-        name: i.name,
-        generic: med?.generic,
-        batchNo: i.batchNo,
-        expiryDate: batch?.expiryDate,
-        qty: i.qty,
-        price: i.price,
-        discount: i.discount,
-        gst: i.gst,
-        lineTotal: lineSubtotal - lineDiscount + lineGst,
-      };
-    });
-    generateInvoicePdf({
-      sale: newSale,
-      branch: branchObj,
-      customerName: billingCustomerName,
-      items: invoiceItems,
-      subtotal,
-      discount,
-      gst,
-      grandTotal,
-    });
+      // Build a real, downloadable PDF invoice for this sale.
+      const branchObj = db.branches.find((b) => b.name === activeBranch);
+      const invoiceItems = cart.map((i) => {
+        const med = db.medicines.find((m) => m.id === i.medicineId);
+        const batch = db.batches.find((b) => b.id === i.batchId);
+        const lineSubtotal = i.price * i.qty;
+        const lineDiscount = (lineSubtotal * i.discount) / 100;
+        const lineGst = ((lineSubtotal - lineDiscount) * i.gst) / 100;
+        return {
+          name: i.name,
+          generic: med?.generic,
+          batchNo: i.batchNo,
+          expiryDate: batch?.expiryDate,
+          qty: i.qty,
+          price: i.price,
+          discount: i.discount,
+          gst: i.gst,
+          lineTotal: lineSubtotal - lineDiscount + lineGst,
+        };
+      });
+      generateInvoicePdf({
+        sale: newSale,
+        branch: branchObj,
+        customerName: billingCustomerName,
+        items: invoiceItems,
+        subtotal,
+        discount,
+        gst,
+        grandTotal,
+      });
 
-    setCart([]);
-    setCustomer(null);
-    setCustomerQuery("");
+      setCart([]);
+      setCustomer(null);
+      setCustomerQuery("");
+    } catch (err) {
+      toast(err.message || "Failed to generate bill.", "error");
+    }
   }
 
   return (
@@ -221,7 +259,9 @@ export default function POSPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[520px] overflow-y-auto pr-1">
             {medOptions.map((m) => {
-              const batch = branchBatches.filter((b) => b.medicineId === m.id)[0];
+              const medBatches = allAvailableBatches.filter((b) => b.medicineId === m.id || b.medicine_id === m.id);
+              const batch = medBatches.find((b) => b.branchName === activeBranch || b.branch_name === activeBranch) || medBatches[0];
+              const availStock = medicineStock(m, db.batches);
               return (
                 <button
                   key={m.id}
@@ -248,9 +288,24 @@ export default function POSPage() {
                     <span className="font-bold text-sm" style={{ color: T.blue }}>
                       {formatCurrency(batch?.sellingPrice)}
                     </span>
-                    <span className="text-[11px]" style={{ color: "#9AA6B2" }}>
-                      {branchBatches.filter((b) => b.medicineId === m.id).reduce((a, b) => a + b.available, 0)} in stock
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {batch?.rack && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                          📍 {batch.rack}
+                        </span>
+                      )}
+                      <span
+                        className={`text-[11px] font-bold px-2 py-0.5 rounded border ${
+                          availStock > 20
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                            : availStock > 0
+                            ? "bg-amber-50 text-amber-800 border-amber-200"
+                            : "bg-red-50 text-red-800 border-red-200"
+                        }`}
+                      >
+                        Avail: {availStock}
+                      </span>
+                    </div>
                   </div>
                 </button>
               );
@@ -329,8 +384,13 @@ export default function POSPage() {
                       <div className="text-xs font-semibold truncate" style={{ color: T.navy }}>
                         {i.name}
                       </div>
-                      <div className="text-[10px]" style={{ color: "#9AA6B2" }}>
-                        Batch {i.batchNo} · {formatCurrency(i.price)}
+                      <div className="text-[10px] flex items-center gap-1.5 flex-wrap" style={{ color: "#9AA6B2" }}>
+                        <span>Batch {i.batchNo} · {formatCurrency(i.price)}</span>
+                        {i.rack && (
+                          <span className="font-semibold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                            📍 {i.rack}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">

@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 import { Plus, Pencil, Trash2, XCircle, CheckCircle2 } from "lucide-react";
-import { pad } from "../../utils/format.js";
-import { BRANCHES } from "../../data/mockData.js";
 import { useApp } from "../../hooks/useApp.js";
+import { createUser, updateUser, toggleUserStatus, deleteUser } from "../../services/userService.js";
 import PageHeader from "../../components/common/PageHeader.jsx";
 import DataTable from "../../components/tables/DataTable.jsx";
 import StatusBadge from "../../components/common/StatusBadge.jsx";
@@ -18,36 +17,58 @@ export default function UsersPage() {
   const [confirmDel, setConfirmDel] = useState(null);
   const [form, setForm] = useState({});
 
+  const defaultBranchName = db.branches.length > 0 ? db.branches[0].name : "Kovilpatti Branch";
+
   function openAdd() {
-    setForm({ name: "", username: "", email: "", phone: "", password: "", role: "Pharmacist", branch: BRANCHES[0].name, status: "Active" });
+    setForm({ name: "", username: "", email: "", phone: "", password: "", role: "Pharmacist", branch: defaultBranchName, status: "Active" });
     setModal({ mode: "add" });
   }
   function openEdit(u) {
-    setForm({ ...u });
+    setForm({ ...u, password: "" });
     setModal({ mode: "edit", id: u.id });
   }
-  function save() {
+
+  async function save() {
     if (!form.name || !form.username || !form.email) {
       toast("Please fill all required fields.", "error");
       return;
     }
-    if (modal.mode === "add") {
-      const id = `USR-${pad(db.users.length + 1)}`;
-      setDb((d) => ({ ...d, users: [...d.users, { ...form, id, created: "2026-08-20", lastLogin: "—" }] }));
-      toast("User created successfully.");
-    } else {
-      setDb((d) => ({ ...d, users: d.users.map((u) => (u.id === modal.id ? { ...u, ...form } : u)) }));
-      toast("User updated successfully.");
+    try {
+      if (modal.mode === "add") {
+        const created = await createUser(form);
+        setDb((d) => ({ ...d, users: [...d.users, created] }));
+        toast("User created successfully.");
+      } else {
+        const updated = await updateUser(modal.id, form);
+        setDb((d) => ({ ...d, users: d.users.map((u) => (u.id === modal.id ? updated : u)) }));
+        toast("User updated successfully.");
+      }
+      setModal(null);
+    } catch (err) {
+      toast(err.message || "Failed to save user.", "error");
     }
-    setModal(null);
   }
-  function toggleStatus(u) {
-    setDb((d) => ({ ...d, users: d.users.map((x) => (x.id === u.id ? { ...x, status: x.status === "Active" ? "Inactive" : "Active" } : x)) }));
-    toast(`${u.name} ${u.status === "Active" ? "deactivated" : "activated"}.`);
+
+  async function toggle(u) {
+    try {
+      const res = await toggleUserStatus(u.id);
+      setDb((d) => ({ ...d, users: d.users.map((x) => (x.id === u.id ? { ...x, status: res.status } : x)) }));
+      toast(`${u.name} ${res.status === "Active" ? "activated" : "deactivated"}.`);
+    } catch (err) {
+      toast(err.message || "Failed to toggle status.", "error");
+    }
   }
-  function remove(u) {
-    setDb((d) => ({ ...d, users: d.users.filter((x) => x.id !== u.id) }));
-    toast("User deleted.");
+
+  async function remove(u) {
+    try {
+      await deleteUser(u.id);
+      setDb((d) => ({ ...d, users: d.users.filter((x) => x.id !== u.id) }));
+      toast("User deleted.");
+      setConfirmDel(null);
+    } catch (err) {
+      toast(err.message || "Failed to delete user.", "error");
+      setConfirmDel(null);
+    }
   }
 
   return (
@@ -82,7 +103,7 @@ export default function UsersPage() {
         actions={(u) => (
           <>
             <IconBtn icon={Pencil} tone="blue" title="Edit" onClick={() => openEdit(u)} />
-            <IconBtn icon={u.status === "Active" ? XCircle : CheckCircle2} tone={u.status === "Active" ? "red" : "green"} title={u.status === "Active" ? "Deactivate" : "Activate"} onClick={() => toggleStatus(u)} />
+            <IconBtn icon={u.status === "Active" ? XCircle : CheckCircle2} tone={u.status === "Active" ? "red" : "green"} title={u.status === "Active" ? "Deactivate" : "Activate"} onClick={() => toggle(u)} />
             <IconBtn icon={Trash2} tone="red" title="Delete" onClick={() => setConfirmDel(u)} />
           </>
         )}
@@ -108,7 +129,8 @@ export default function UsersPage() {
           <FormInput
             label="Password"
             type="password"
-            placeholder={modal?.mode === "edit" ? "Leave blank to keep unchanged" : ""}
+            placeholder={modal?.mode === "edit" ? "Leave blank to keep unchanged" : "Default: medilink123"}
+            value={form.password || ""}
             onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
           />
           <FormSelect label="Role" value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
@@ -116,8 +138,8 @@ export default function UsersPage() {
             <option>Pharmacist</option>
           </FormSelect>
           <FormSelect label="Branch" value={form.branch} onChange={(e) => setForm((f) => ({ ...f, branch: e.target.value }))}>
-            {BRANCHES.map((b) => (
-              <option key={b.id}>{b.name}</option>
+            {db.branches.map((b) => (
+              <option key={b.id} value={b.name}>{b.name}</option>
             ))}
           </FormSelect>
           <FormSelect label="Status" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>

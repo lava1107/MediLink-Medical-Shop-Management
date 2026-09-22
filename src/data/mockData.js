@@ -4,7 +4,7 @@ import { pad, addDays } from "../utils/format.js";
 export const TODAY = "2026-08-20";
 
 export const BRANCHES = [
-  { id: "BR-01", name: "Kovilpatti Branch", manager: "R. Saravanan", address: "12, VOC Street, Bus Stand Road", city: "Kovilpatti", state: "Tamil Nadu", pin: "628501", phone: "+91 98421 30221", email: "kovilpatti@medilink.in", opening: "08:30 AM", closing: "09:30 PM", status: "Active", staff: 6, isHQ: true, lat: 9.1734, lng: 77.8713 },
+  { id: "BR-01", name: "Kovilpatti Branch", manager: "R. Rajan", address: "12, VOC Street, Bus Stand Road", city: "Kovilpatti", state: "Tamil Nadu", pin: "628501", phone: "+91 98421 30221", email: "kovilpatti@medilink.in", opening: "08:30 AM", closing: "09:30 PM", status: "Active", staff: 6, isHQ: true, lat: 9.1734, lng: 77.8713 },
   { id: "BR-02", name: "Tirunelveli Branch", manager: "K. Meenakshi", address: "45, Trivandrum Main Road", city: "Tirunelveli", state: "Tamil Nadu", pin: "627001", phone: "+91 94432 11876", email: "tirunelveli@medilink.in", opening: "09:00 AM", closing: "09:00 PM", status: "Active", staff: 5, isHQ: false, lat: 8.7139, lng: 77.7567 },
   { id: "BR-03", name: "Madurai Branch", manager: "P. Arun Kumar", address: "8, Anna Nagar Main Road", city: "Madurai", state: "Tamil Nadu", pin: "625020", phone: "+91 90475 62310", email: "madurai@medilink.in", opening: "08:00 AM", closing: "10:00 PM", status: "Active", staff: 7, isHQ: false, lat: 9.9252, lng: 78.1198 },
 ];
@@ -110,7 +110,7 @@ export const CUSTOMERS = [
 
 export const USERS = [
   { id: "USR-01", name: "Lavanya M", username: "lavanya.admin", email: "lavanya.admin@medilink.com", phone: "+91 90031 22110", role: "Admin", branch: "Kovilpatti Branch", status: "Active", created: "2024-01-05", lastLogin: "2026-08-20 09:12 AM" },
-  { id: "USR-02", name: "R. Saravanan", username: "saravanan.pharmacist", email: "saravanan.pharmacist@medilink.com", phone: "+91 98421 30221", role: "Pharmacist", branch: "Kovilpatti Branch", status: "Active", created: "2024-01-08", lastLogin: "2026-08-20 08:45 AM" },
+  { id: "USR-02", name: "R. Rajan", username: "rajan.pharmacist", email: "rajan.pharmacist@medilink.com", phone: "+91 98421 30221", role: "Pharmacist", branch: "Kovilpatti Branch", status: "Active", created: "2024-01-08", lastLogin: "2026-08-20 08:45 AM" },
   { id: "USR-03", name: "K. Meenakshi", username: "meenakshi.ph", email: "meenakshi@medilink.in", phone: "+91 94432 11876", role: "Pharmacist", branch: "Tirunelveli Branch", status: "Active", created: "2024-02-14", lastLogin: "2026-08-19 06:30 PM" },
   { id: "USR-04", name: "P. Arun Kumar", username: "arunkumar.ph", email: "arunkumar@medilink.in", phone: "+91 90475 62310", role: "Pharmacist", branch: "Madurai Branch", status: "Active", created: "2024-02-20", lastLogin: "2026-08-20 07:58 AM" },
   { id: "USR-05", name: "S. Divya", username: "divya.ph", email: "divya@medilink.in", phone: "+91 96297 40012", role: "Pharmacist", branch: "Madurai Branch", status: "Inactive", created: "2024-05-11", lastLogin: "2026-07-30 11:20 AM" },
@@ -150,10 +150,10 @@ export const PURCHASES = [
 ];
 
 export const RESERVATIONS = [
-  { id: "RSV-01", customer: "Suresh Babu", medicine: "Human Mixtard Insulin", branch: "Kovilpatti Branch", quantity: 2, resDate: "2026-08-19", expiry: "2026-08-22", status: "Pending", createdBy: "R. Saravanan" },
+  { id: "RSV-01", customer: "Suresh Babu", medicine: "Human Mixtard Insulin", branch: "Kovilpatti Branch", quantity: 2, resDate: "2026-08-19", expiry: "2026-08-22", status: "Pending", createdBy: "R. Rajan" },
   { id: "RSV-02", customer: "Muthu Vel", medicine: "Moxifloxacin Eye Drops", branch: "Madurai Branch", quantity: 1, resDate: "2026-08-18", expiry: "2026-08-21", status: "Reserved", createdBy: "P. Arun Kumar" },
   { id: "RSV-03", customer: "Karthikeyan S", medicine: "Azithromycin 500mg", branch: "Tirunelveli Branch", quantity: 3, resDate: "2026-08-17", expiry: "2026-08-20", status: "Collected", createdBy: "K. Meenakshi" },
-  { id: "RSV-04", customer: "Vasanthi Murugan", medicine: "Ascoril Cough Syrup", branch: "Kovilpatti Branch", quantity: 1, resDate: "2026-08-15", expiry: "2026-08-18", status: "Expired", createdBy: "R. Saravanan" },
+  { id: "RSV-04", customer: "Vasanthi Murugan", medicine: "Ascoril Cough Syrup", branch: "Kovilpatti Branch", quantity: 1, resDate: "2026-08-15", expiry: "2026-08-18", status: "Expired", createdBy: "R. Rajan" },
   { id: "RSV-05", customer: "Arun Prakash", medicine: "Metformin 500mg", branch: "Madurai Branch", quantity: 2, resDate: "2026-08-14", expiry: "2026-08-17", status: "Cancelled", createdBy: "P. Arun Kumar" },
 ];
 
@@ -192,7 +192,7 @@ export const PRESCRIPTIONS = [
     prescriptionDate: "2026-08-18",
     prescriptionRef: "RX-2291",
     status: "Verified",
-    verifiedBy: "R. Saravanan",
+    verifiedBy: "R. Rajan",
     verifiedDate: "2026-08-19",
     remarks: "Valid prescription, dosage confirmed.",
   },
@@ -234,7 +234,7 @@ export const PRESCRIPTIONS = [
     prescriptionDate: "2026-08-15",
     prescriptionRef: "RX-5108",
     status: "Rejected",
-    verifiedBy: "R. Saravanan",
+    verifiedBy: "R. Rajan",
     verifiedDate: "2026-08-16",
     remarks: "Reference could not be verified with the issuing clinic.",
   },

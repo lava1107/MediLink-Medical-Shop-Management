@@ -1,46 +1,74 @@
-// Mock, REST-shaped service for prescription verification. Integrates with
-// Medicine Management (medicine.rx flag) and Sales & Billing (Generate Bill is
-// gated on a Verified prescription for any Rx-required cart item).
+import { api } from "./api.js";
 
-export async function getPrescriptions(prescriptions) {
-  await new Promise((r) => setTimeout(r, 120));
-  return prescriptions;
+export async function getPrescriptions() {
+  return await api.get("/prescriptions");
 }
 
-export async function getPrescriptionById(prescriptions, id) {
-  await new Promise((r) => setTimeout(r, 100));
-  return prescriptions.find((p) => p.id === id) || null;
+export async function getPrescriptionById(id) {
+  return await api.get(`/prescriptions/${id}`);
 }
 
 /**
- * Finds an existing prescription for this customer + medicine pair, if any.
- * Used by Sales & Billing to look up verification status when a Rx-required
- * medicine is added to the cart.
+ * Finds an existing prescription for customer + medicine
  */
 export function findPrescription(prescriptions, customerName, medicineName) {
+  if (!prescriptions || !customerName || !medicineName) return null;
   return (
-    prescriptions.find((p) => p.customerName === customerName && p.medicine === medicineName) || null
+    prescriptions.find(
+      (p) =>
+        p.customerName?.toLowerCase() === customerName.toLowerCase() &&
+        p.medicine?.toLowerCase() === medicineName.toLowerCase()
+    ) || null
   );
 }
 
 export async function createPrescription(prescriptions, payload) {
-  await new Promise((r) => setTimeout(r, 150));
-  const nextNum = prescriptions.length + 1;
-  const id = `RX-${String(nextNum).padStart(2, "0")}`;
-  const record = { id, status: "Pending", verifiedBy: "", verifiedDate: "", remarks: "", ...payload };
-  return [record, ...prescriptions];
+  try {
+    const created = await api.post("/prescriptions", payload);
+    return [created, ...(prescriptions || [])];
+  } catch (err) {
+    console.error("createPrescription error:", err);
+    throw err;
+  }
 }
 
 export async function verifyPrescription(prescriptions, id, verifiedBy, remarks = "") {
-  await new Promise((r) => setTimeout(r, 150));
-  return prescriptions.map((p) =>
-    p.id === id ? { ...p, status: "Verified", verifiedBy, verifiedDate: new Date().toISOString().slice(0, 10), remarks: remarks || p.remarks } : p
-  );
+  try {
+    const updated = await api.patch(`/prescriptions/${id}/verify`, { verifiedBy, remarks });
+    return (prescriptions || []).map((p) => (p.id === id ? updated : p));
+  } catch (err) {
+    console.error("verifyPrescription error:", err);
+    throw err;
+  }
 }
 
 export async function rejectPrescription(prescriptions, id, verifiedBy, remarks = "") {
-  await new Promise((r) => setTimeout(r, 150));
-  return prescriptions.map((p) =>
-    p.id === id ? { ...p, status: "Rejected", verifiedBy, verifiedDate: new Date().toISOString().slice(0, 10), remarks: remarks || p.remarks } : p
-  );
+  try {
+    const updated = await api.patch(`/prescriptions/${id}/reject`, { verifiedBy, remarks });
+    return (prescriptions || []).map((p) => (p.id === id ? updated : p));
+  } catch (err) {
+    console.warn("Backend unavailable, rejecting prescription locally:", err.message);
+    return (prescriptions || []).map((p) =>
+      p.id === id ? { ...p, status: "Rejected", verifiedBy, verifiedDate: new Date().toISOString().slice(0, 10), remarks } : p
+    );
+  }
 }
+
+export async function updatePrescription(id, payload) {
+  try {
+    return await api.put(`/prescriptions/${id}`, payload);
+  } catch (err) {
+    console.warn("Backend unavailable, updating prescription locally:", err.message);
+    return { id, ...payload };
+  }
+}
+
+export async function deletePrescription(id) {
+  try {
+    return await api.delete(`/prescriptions/${id}`);
+  } catch (err) {
+    console.warn("Backend unavailable, deleting prescription locally:", err.message);
+    return { id };
+  }
+}
+

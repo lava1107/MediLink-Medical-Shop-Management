@@ -1,38 +1,34 @@
-// Mock, REST-shaped service for medicines. Each function currently reads/writes the
-// in-memory list handed to it (typically AppContext's `db.medicines`) but mirrors the
-// signature you'd use for `GET/POST/PUT/DELETE /api/medicines` once a backend exists.
+import { api } from "./api.js";
 
-export async function getMedicines(medicines) {
-  await new Promise((r) => setTimeout(r, 120));
-  return medicines;
+export async function getMedicines() {
+  return await api.get("/medicines");
 }
 
-export async function getMedicineById(medicines, id) {
-  await new Promise((r) => setTimeout(r, 100));
-  return medicines.find((m) => m.id === id) || null;
+export async function getMedicineById(id) {
+  return await api.get(`/medicines/${id}`);
 }
 
-export async function createMedicine(medicines, payload) {
-  await new Promise((r) => setTimeout(r, 150));
-  const nextNum = medicines.length + 1;
-  const id = `MED-${String(nextNum).padStart(2, "0")}`;
-  return [...medicines, { id, ...payload }];
+export async function createMedicine(payload) {
+  return await api.post("/medicines", payload);
 }
 
-export async function updateMedicine(medicines, id, payload) {
-  await new Promise((r) => setTimeout(r, 150));
-  return medicines.map((m) => (m.id === id ? { ...m, ...payload } : m));
+export async function updateMedicine(id, payload) {
+  return await api.put(`/medicines/${id}`, payload);
 }
 
-export async function deleteMedicine(medicines, id) {
-  await new Promise((r) => setTimeout(r, 120));
-  return medicines.filter((m) => m.id !== id);
+export async function deleteMedicine(id) {
+  return await api.delete(`/medicines/${id}`);
 }
 
-export function medicineStock(medicine, batches) {
-  return batches
-    .filter((b) => b.medicineId === medicine.id && b.status !== "Expired")
-    .reduce((total, b) => total + b.available, 0);
+export function medicineStock(medicine, batches = []) {
+  if (!medicine) return 0;
+  const medBatches = (batches || []).filter(
+    (b) => (b.medicineId === medicine.id || b.medicine_id === medicine.id) && b.status !== "Expired"
+  );
+  if (medBatches.length > 0) {
+    return medBatches.reduce((total, b) => total + (Number(b.available) || 0), 0);
+  }
+  return Number(medicine.stock) || 0;
 }
 
 export function stockStatus(qty) {

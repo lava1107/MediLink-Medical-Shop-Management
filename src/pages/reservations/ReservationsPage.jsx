@@ -1,9 +1,8 @@
 import React, { useState } from "react";
-import { Plus, Check, X, PackageCheck } from "lucide-react";
+import { Plus, Check, X, PackageCheck, Pencil } from "lucide-react";
 import { useApp } from "../../hooks/useApp.js";
 import { useAuth } from "../../hooks/useAuth.js";
-import { BRANCHES, MEDICINES, CUSTOMERS } from "../../data/mockData.js";
-import { confirmReservation, markCollected, cancelReservation, createReservation } from "../../services/reservationService.js";
+import { confirmReservation, markCollected, cancelReservation, createReservation, updateReservation } from "../../services/reservationService.js";
 import { formatDate, addDays } from "../../utils/format.js";
 import { TODAY } from "../../data/mockData.js";
 import PageHeader from "../../components/common/PageHeader.jsx";
@@ -15,16 +14,65 @@ import Modal from "../../components/common/Modal.jsx";
 import { FormInput, FormSelect } from "../../components/common/FormControls.jsx";
 
 export default function ReservationsPage() {
-  const { db, setDb, toast } = useApp();
+  const { db, setDb, toast, refreshDb } = useApp();
   const { user } = useAuth();
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({
     customer: "",
     medicine: "",
-    branch: user.role === "Admin" ? BRANCHES[0].name : user.branch,
+    branch: user.role === "Admin" ? (db.branches?.[0]?.name || "Kovilpatti Main Branch") : user.branch,
     quantity: 1,
     expiry: addDays(TODAY, 3),
   });
+
+  const [editModal, setEditModal] = useState(false);
+  const [editingRes, setEditingRes] = useState(null);
+  const [editForm, setEditForm] = useState({
+    customer: "",
+    medicine: "",
+    branch: "",
+    quantity: 1,
+    expiry: "",
+    status: "Pending",
+  });
+
+  function openEdit(r) {
+    setEditingRes(r);
+    setEditForm({
+      customer: r.customer || "",
+      medicine: r.medicine || "",
+      branch: r.branch || (user.role === "Admin" ? (db.branches?.[0]?.name || "Kovilpatti Main Branch") : user.branch),
+      quantity: r.quantity || 1,
+      expiry: r.expiry ? r.expiry.split("T")[0] : addDays(TODAY, 3),
+      status: r.status || "Pending",
+    });
+    setEditModal(true);
+  }
+
+  async function handleSaveEdit() {
+    if (!editForm.customer || !editForm.medicine || !editForm.quantity) {
+      toast("Fill customer, medicine and quantity.", "error");
+      return;
+    }
+    try {
+      const payload = {
+        ...editForm,
+        quantity: parseInt(editForm.quantity) || 1,
+      };
+      const updated = await updateReservation(editingRes.id, payload);
+      setDb((d) => ({
+        ...d,
+        reservations: (d.reservations || []).map((r) =>
+          r.id === editingRes.id ? { ...r, ...payload, ...updated } : r
+        ),
+      }));
+      toast("Reservation updated successfully.");
+      setEditModal(false);
+      refreshDb?.();
+    } catch (err) {
+      toast(err.message || "Failed to update reservation", "error");
+    }
+  }
 
   async function updateStatus(r, action) {
     let updated;
@@ -33,6 +81,7 @@ export default function ReservationsPage() {
     if (action === "cancel") updated = await cancelReservation(db.reservations, r.id);
     setDb((d) => ({ ...d, reservations: updated }));
     toast(`Reservation ${action === "confirm" ? "confirmed" : action === "collect" ? "marked as collected" : "cancelled"}.`);
+    refreshDb?.();
   }
 
   async function handleCreate() {
@@ -44,6 +93,7 @@ export default function ReservationsPage() {
     setDb((d) => ({ ...d, reservations: updated }));
     toast("Reservation created. This does not create a sale until the customer collects it.");
     setModal(false);
+    refreshDb?.();
   }
 
   return (
@@ -72,19 +122,16 @@ export default function ReservationsPage() {
         data={db.reservations}
         searchKeys={["customer", "medicine"]}
         filters={[{ key: "status", label: "Status", options: ["Pending", "Reserved", "Collected", "Cancelled", "Expired"] }]}
-        actions={(r) =>
-          r.status === "Pending" || r.status === "Reserved" ? (
-            <>
-              {r.status === "Pending" && <IconBtn icon={Check} tone="green" title="Confirm" onClick={() => updateStatus(r, "confirm")} />}
-              {r.status === "Reserved" && <IconBtn icon={PackageCheck} tone="green" title="Mark as Collected" onClick={() => updateStatus(r, "collect")} />}
+        actions={(r) => (
+          <div className="flex items-center gap-1">
+            <IconBtn icon={Pencil} title="Edit Reservation" onClick={() => openEdit(r)} />
+            {r.status === "Pending" && <IconBtn icon={Check} tone="green" title="Confirm" onClick={() => updateStatus(r, "confirm")} />}
+            {r.status === "Reserved" && <IconBtn icon={PackageCheck} tone="green" title="Mark as Collected" onClick={() => updateStatus(r, "collect")} />}
+            {r.status !== "Cancelled" && r.status !== "Collected" && (
               <IconBtn icon={X} tone="red" title="Cancel" onClick={() => updateStatus(r, "cancel")} />
-            </>
-          ) : (
-            <span className="text-[11px]" style={{ color: "#C9D2DA" }}>
-              —
-            </span>
-          )
-        }
+            )}
+          </div>
+        )}
       />
       <Modal
         open={modal}
@@ -102,23 +149,66 @@ export default function ReservationsPage() {
         <div className="grid grid-cols-2 gap-4">
           <FormSelect label="Customer" required value={form.customer} onChange={(e) => setForm((f) => ({ ...f, customer: e.target.value }))}>
             <option value="">Select customer</option>
-            {CUSTOMERS.map((c) => (
+            {(db.customers || []).map((c) => (
               <option key={c.id}>{c.name}</option>
             ))}
           </FormSelect>
           <FormSelect label="Medicine" required value={form.medicine} onChange={(e) => setForm((f) => ({ ...f, medicine: e.target.value }))}>
             <option value="">Select medicine</option>
-            {MEDICINES.map((m) => (
+            {(db.medicines || []).map((m) => (
               <option key={m.id}>{m.name}</option>
             ))}
           </FormSelect>
           <FormSelect label="Branch" required value={form.branch} onChange={(e) => setForm((f) => ({ ...f, branch: e.target.value }))} disabled={user.role !== "Admin"}>
-            {BRANCHES.map((b) => (
+            {(db.branches || []).map((b) => (
               <option key={b.id}>{b.name}</option>
             ))}
           </FormSelect>
           <FormInput label="Quantity" required type="number" min="1" value={form.quantity} onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))} />
           <FormInput label="Reservation Expiry" required type="date" value={form.expiry} onChange={(e) => setForm((f) => ({ ...f, expiry: e.target.value }))} />
+        </div>
+      </Modal>
+
+      <Modal
+        open={editModal}
+        onClose={() => setEditModal(false)}
+        title={`Edit Reservation ${editingRes?.id || ""}`}
+        footer={
+          <>
+            <Btn variant="secondary" onClick={() => setEditModal(false)}>
+              Cancel
+            </Btn>
+            <Btn onClick={handleSaveEdit}>Save Changes</Btn>
+          </>
+        }
+      >
+        <div className="grid grid-cols-2 gap-4">
+          <FormSelect label="Customer" required value={editForm.customer} onChange={(e) => setEditForm((f) => ({ ...f, customer: e.target.value }))}>
+            <option value="">Select customer</option>
+            {(db.customers || []).map((c) => (
+              <option key={c.id}>{c.name}</option>
+            ))}
+          </FormSelect>
+          <FormSelect label="Medicine" required value={editForm.medicine} onChange={(e) => setEditForm((f) => ({ ...f, medicine: e.target.value }))}>
+            <option value="">Select medicine</option>
+            {(db.medicines || []).map((m) => (
+              <option key={m.id}>{m.name}</option>
+            ))}
+          </FormSelect>
+          <FormSelect label="Branch" required value={editForm.branch} onChange={(e) => setEditForm((f) => ({ ...f, branch: e.target.value }))}>
+            {(db.branches || []).map((b) => (
+              <option key={b.id}>{b.name}</option>
+            ))}
+          </FormSelect>
+          <FormInput label="Quantity" required type="number" min="1" value={editForm.quantity} onChange={(e) => setEditForm((f) => ({ ...f, quantity: e.target.value }))} />
+          <FormInput label="Reservation Expiry" required type="date" value={editForm.expiry} onChange={(e) => setEditForm((f) => ({ ...f, expiry: e.target.value }))} />
+          <FormSelect label="Status" required value={editForm.status} onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value }))}>
+            <option value="Pending">Pending</option>
+            <option value="Reserved">Reserved</option>
+            <option value="Collected">Collected</option>
+            <option value="Cancelled">Cancelled</option>
+            <option value="Expired">Expired</option>
+          </FormSelect>
         </div>
       </Modal>
     </div>

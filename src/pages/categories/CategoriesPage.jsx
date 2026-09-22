@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
-import { pad } from "../../utils/format.js";
 import { useApp } from "../../hooks/useApp.js";
+import { createCategory, updateCategory, deleteCategory } from "../../services/categoryService.js";
 import PageHeader from "../../components/common/PageHeader.jsx";
 import DataTable from "../../components/tables/DataTable.jsx";
 import StatusBadge from "../../components/common/StatusBadge.jsx";
@@ -25,20 +25,39 @@ export default function CategoriesPage() {
     setForm({ ...c });
     setModal({ mode: "edit", id: c.id });
   }
-  function save() {
+
+  async function save() {
     if (!form.name) {
       toast("Category name is required.", "error");
       return;
     }
-    if (modal.mode === "add") {
-      const id = `CAT-${pad(db.categories.length + 1)}`;
-      setDb((d) => ({ ...d, categories: [...d.categories, { ...form, id, created: "2026-08-20" }] }));
-      toast("Category added.");
-    } else {
-      setDb((d) => ({ ...d, categories: d.categories.map((c) => (c.id === modal.id ? { ...c, ...form } : c)) }));
-      toast("Category updated.");
+    try {
+      if (modal.mode === "add") {
+        const created = await createCategory(form);
+        setDb((d) => ({ ...d, categories: [...d.categories, created] }));
+        toast("Category added.");
+      } else {
+        const updated = await updateCategory(modal.id, form);
+        setDb((d) => ({ ...d, categories: d.categories.map((c) => (c.id === modal.id ? updated : c)) }));
+        toast("Category updated.");
+      }
+      setModal(null);
+    } catch (err) {
+      toast(err.message || "Failed to save category.", "error");
     }
-    setModal(null);
+  }
+
+  async function handleDelete() {
+    if (!confirmDel) return;
+    try {
+      await deleteCategory(confirmDel.id);
+      setDb((d) => ({ ...d, categories: d.categories.filter((c) => c.id !== confirmDel.id) }));
+      toast("Category deleted.");
+      setConfirmDel(null);
+    } catch (err) {
+      toast(err.message || "Failed to delete category.", "error");
+      setConfirmDel(null);
+    }
   }
 
   return (
@@ -100,10 +119,7 @@ export default function CategoriesPage() {
         danger
         title="Delete category?"
         message={`Remove "${confirmDel?.name}" from categories?`}
-        onConfirm={() => {
-          setDb((d) => ({ ...d, categories: d.categories.filter((c) => c.id !== confirmDel.id) }));
-          toast("Category deleted.");
-        }}
+        onConfirm={handleDelete}
       />
     </div>
   );

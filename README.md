@@ -35,7 +35,7 @@ On the login screen, use the **Quick Demo Login** buttons, or sign in manually:
 | Role       | Username        | Password (any value works in this mock build) |
 |------------|-----------------|-------------------------------------------------|
 | Admin      | `lavanya.admin` | anything |
-| Pharmacist | `saravanan.ph`  | anything |
+| Pharmacist | `rajan.pharmacist`  | anything |
 
 ## Project Structure
 

@@ -28,7 +28,7 @@ const PAGE_TITLES = {
 
 export default function Navbar({ toggleSidebar }) {
   const { user, currentBranch, setCurrentBranch } = useAuth();
-  const { notifications, markAllRead } = useApp();
+  const { db, notifications, markAllRead } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [showNotif, setShowNotif] = useState(false);
@@ -65,7 +65,7 @@ export default function Navbar({ toggleSidebar }) {
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold" style={{ background: T.blueTint, color: T.blue }}>
             <Building size={13} />
             <select value={currentBranch} onChange={(e) => setCurrentBranch(e.target.value)} className="bg-transparent outline-none font-semibold" style={{ color: T.blue }}>
-              {BRANCHES.map((b) => (
+              {(db?.branches || BRANCHES).map((b) => (
                 <option key={b.id} value={b.name}>
                   {b.name}
                 </option>
