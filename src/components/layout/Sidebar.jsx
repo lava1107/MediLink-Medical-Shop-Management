@@ -3,51 +3,55 @@ import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard, Users, Building2, Pill, Tags, PackageSearch, Truck, ShoppingCart,
   UserRound, CalendarClock, MapPinned, Handshake, BarChart3, Bell, Settings, LogOut,
-  ClipboardList, Menu, FileCheck2,
+  ClipboardList, Menu, FileCheck2, KeyRound,
 } from "lucide-react";
 import { T } from "../../utils/theme.js";
 import { classNames } from "../../utils/format.js";
 import { useAuth } from "../../hooks/useAuth.js";
 import { useApp } from "../../hooks/useApp.js";
+import { useTranslation } from "../../context/LanguageContext.jsx";
 
 const NAV_ADMIN = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/users", label: "Users", icon: Users },
-  { to: "/branches", label: "Branches", icon: Building2 },
-  { to: "/medicines", label: "Medicines", icon: Pill },
-  { to: "/categories", label: "Categories", icon: Tags },
-  { to: "/batches", label: "Medicine Batches", icon: PackageSearch },
-  { to: "/suppliers", label: "Suppliers", icon: Truck },
-  { to: "/purchases", label: "Purchases", icon: ClipboardList },
-  { to: "/sales", label: "Sales & Billing", icon: ShoppingCart },
-  { to: "/prescriptions", label: "Prescriptions", icon: FileCheck2 },
-  { to: "/customers", label: "Customers", icon: UserRound },
-  { to: "/reservations", label: "Reservations", icon: CalendarClock },
-  { to: "/availability", label: "Medicine Availability", icon: MapPinned },
-  { to: "/partners", label: "Partner Medical Shops", icon: Handshake },
-  { to: "/reports", label: "Reports", icon: BarChart3 },
-  { to: "/notifications", label: "Notifications", icon: Bell },
-  { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/dashboard", label: "Dashboard", key: "dashboard", icon: LayoutDashboard },
+  { to: "/users", label: "Users", key: "users", icon: Users },
+  { to: "/branches", label: "Branches", key: "branches", icon: Building2 },
+  { to: "/medicines", label: "Medicines", key: "medicines", icon: Pill },
+  { to: "/categories", label: "Categories", key: "categories", icon: Tags },
+  { to: "/batches", label: "Medicine Batches", key: "batches", icon: PackageSearch },
+  { to: "/suppliers", label: "Suppliers", key: "suppliers", icon: Truck },
+  { to: "/purchases", label: "Purchases", key: "purchases", icon: ClipboardList },
+  { to: "/sales", label: "Sales & Billing", key: "sales", icon: ShoppingCart },
+  { to: "/prescriptions", label: "Prescriptions", key: "prescriptions", icon: FileCheck2 },
+  { to: "/customers", label: "Customers", key: "customers", icon: UserRound },
+  { to: "/reservations", label: "Reservations", key: "reservations", icon: CalendarClock },
+  { to: "/availability", label: "Medicine Availability", key: "availability", icon: MapPinned },
+  { to: "/partners", label: "Partner Medical Shops", key: "partners", icon: Handshake },
+  { to: "/reports", label: "Reports", key: "reports", icon: BarChart3 },
+  { to: "/api-access", label: "API Access", key: "apiAccess", icon: KeyRound },
+  { to: "/notifications", label: "Notifications", key: "notifications", icon: Bell },
+  { to: "/settings", label: "Settings", key: "settings", icon: Settings },
 ];
 
 const NAV_PHARMACIST = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/medicines", label: "Medicines", icon: Pill },
-  { to: "/batches", label: "Medicine Batches", icon: PackageSearch },
-  { to: "/sales", label: "Sales & Billing", icon: ShoppingCart },
-  { to: "/prescriptions", label: "Prescriptions", icon: FileCheck2 },
-  { to: "/customers", label: "Customers", icon: UserRound },
-  { to: "/reservations", label: "Reservations", icon: CalendarClock },
-  { to: "/availability", label: "Medicine Availability", icon: MapPinned },
-  { to: "/partners", label: "Partner Medical Shops", icon: Handshake },
-  { to: "/reports", label: "Reports", icon: BarChart3 },
-  { to: "/notifications", label: "Notifications", icon: Bell },
-  { to: "/settings", label: "Profile", icon: Settings },
+  { to: "/dashboard", label: "Dashboard", key: "dashboard", icon: LayoutDashboard },
+  { to: "/medicines", label: "Medicines", key: "medicines", icon: Pill },
+  { to: "/batches", label: "Medicine Batches", key: "batches", icon: PackageSearch },
+  { to: "/sales", label: "Sales & Billing", key: "sales", icon: ShoppingCart },
+  { to: "/prescriptions", label: "Prescriptions", key: "prescriptions", icon: FileCheck2 },
+  { to: "/customers", label: "Customers", key: "customers", icon: UserRound },
+  { to: "/reservations", label: "Reservations", key: "reservations", icon: CalendarClock },
+  { to: "/availability", label: "Medicine Availability", key: "availability", icon: MapPinned },
+  { to: "/partners", label: "Partner Medical Shops", key: "partners", icon: Handshake },
+  { to: "/reports", label: "Reports", key: "reports", icon: BarChart3 },
+  { to: "/api-access", label: "API Access", key: "apiAccess", icon: KeyRound },
+  { to: "/notifications", label: "Notifications", key: "notifications", icon: Bell },
+  { to: "/settings", label: "Profile", key: "settings", icon: Settings },
 ];
 
 export default function Sidebar({ collapsed, setCollapsed }) {
   const { user, logout } = useAuth();
   const { notifications } = useApp();
+  const { t } = useTranslation();
   const items = user.role === "Admin" ? NAV_ADMIN : NAV_PHARMACIST;
   const hasUnread = notifications.some((n) => !n.read);
 
@@ -74,7 +78,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
           <NavLink
             key={it.to}
             to={it.to}
-            title={collapsed ? it.label : undefined}
+            title={collapsed ? t(it.key, it.label) : undefined}
             className={({ isActive }) =>
               classNames(
                 "flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-colors relative",
@@ -84,7 +88,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
             style={({ isActive }) => ({ background: isActive ? T.blueTint : "transparent", color: isActive ? T.blue : T.navySoft })}
           >
             <it.icon size={17} />
-            {!collapsed && <span>{it.label}</span>}
+            {!collapsed && <span>{t(it.key, it.label)}</span>}
             {!collapsed && it.to === "/notifications" && hasUnread && <span className="ml-auto w-1.5 h-1.5 rounded-full" style={{ background: T.red }} />}
           </NavLink>
         ))}
@@ -111,7 +115,7 @@ export default function Sidebar({ collapsed, setCollapsed }) {
           style={{ color: T.red }}
         >
           <LogOut size={16} />
-          {!collapsed && "Logout"}
+          {!collapsed && t("logout", "Logout")}
         </button>
       </div>
     </aside>

@@ -110,11 +110,12 @@ export const CUSTOMERS = [
 
 export const USERS = [
   { id: "USR-01", name: "Lavanya M", username: "lavanya.admin", email: "lavanya.admin@medilink.com", phone: "+91 90031 22110", role: "Admin", branch: "Kovilpatti Branch", status: "Active", created: "2024-01-05", lastLogin: "2026-08-20 09:12 AM" },
-  { id: "USR-02", name: "R. Rajan", username: "rajan.pharmacist", email: "rajan.pharmacist@medilink.com", phone: "+91 98421 30221", role: "Pharmacist", branch: "Kovilpatti Branch", status: "Active", created: "2024-01-08", lastLogin: "2026-08-20 08:45 AM" },
+  { id: "USR-02", name: "M. Rajan", username: "rajan.pharmacist", email: "rajan.pharmacist@medilink.com", phone: "+91 98421 30221", role: "Pharmacist", branch: "Kovilpatti Branch", status: "Active", created: "2024-01-08", lastLogin: "2026-08-20 08:45 AM" },
   { id: "USR-03", name: "K. Meenakshi", username: "meenakshi.ph", email: "meenakshi@medilink.in", phone: "+91 94432 11876", role: "Pharmacist", branch: "Tirunelveli Branch", status: "Active", created: "2024-02-14", lastLogin: "2026-08-19 06:30 PM" },
   { id: "USR-04", name: "P. Arun Kumar", username: "arunkumar.ph", email: "arunkumar@medilink.in", phone: "+91 90475 62310", role: "Pharmacist", branch: "Madurai Branch", status: "Active", created: "2024-02-20", lastLogin: "2026-08-20 07:58 AM" },
-  { id: "USR-05", name: "S. Divya", username: "divya.ph", email: "divya@medilink.in", phone: "+91 96297 40012", role: "Pharmacist", branch: "Madurai Branch", status: "Inactive", created: "2024-05-11", lastLogin: "2026-07-30 11:20 AM" },
+  { id: "USR-05", name: "M. Divya", username: "divya.ph", email: "divya@medilink.in", phone: "+91 96297 40012", role: "Pharmacist", branch: "Madurai Branch", status: "Active", created: "2024-05-11", lastLogin: "2026-08-20 11:20 AM" },
   { id: "USR-06", name: "N. Bhuvaneshwari", username: "bhuvana.ph", email: "bhuvana@medilink.in", phone: "+91 89258 90341", role: "Pharmacist", branch: "Tirunelveli Branch", status: "Active", created: "2024-06-02", lastLogin: "2026-08-18 04:10 PM" },
+  { id: "USR-07", name: "Dr. Sundar V", username: "sundar.admin", email: "sundar.admin@medilink.com", phone: "+91 94441 55667", role: "Admin", branch: "Madurai Branch", status: "Active", created: "2024-06-15", lastLogin: "2026-08-20 09:00 AM" },
 ];
 
 const PAY_METHODS = ["Cash", "UPI", "Card"];

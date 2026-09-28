@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Search, X, Trash2, Plus, ShoppingCart, Banknote, CreditCard, Smartphone, AlertTriangle } from "lucide-react";
+import { Search, X, Trash2, Plus, ShoppingCart, Banknote, CreditCard, Smartphone, AlertTriangle, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useApp } from "../../hooks/useApp.js";
 import { useAuth } from "../../hooks/useAuth.js";
 import { createSale } from "../../services/salesService.js";
@@ -16,6 +16,8 @@ import Modal from "../../components/common/Modal.jsx";
 import { FormInput } from "../../components/common/FormControls.jsx";
 import PrescriptionStatusBadge from "../../components/common/PrescriptionStatusBadge.jsx";
 import PrescriptionVerificationModal from "../../components/prescriptions/PrescriptionVerificationModal.jsx";
+import DrugSafetyModal from "../../components/common/DrugSafetyModal.jsx";
+import { analyzePrescriptionSafety } from "../../services/drugSafetyEngine.js";
 
 export default function POSPage() {
   const { user, currentBranch } = useAuth();
@@ -23,6 +25,8 @@ export default function POSPage() {
   const activeBranch = user.role === "Admin" ? currentBranch : user.branch;
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState([]);
+  const [safetyModalOpen, setSafetyModalOpen] = useState(false);
+  const [safetyOverride, setSafetyOverride] = useState(false);
   const [customerQuery, setCustomerQuery] = useState("");
   const [customer, setCustomer] = useState(null);
   const [payment, setPayment] = useState("Cash");
@@ -244,7 +248,21 @@ export default function POSPage() {
 
   return (
     <div>
-      <PageHeader title="Sales & Billing" subtitle={`Point of Sale · ${activeBranch}`} crumbs={["MediLink", "Sales & Billing"]} />
+      <PageHeader
+        title="Sales & Billing"
+        subtitle={`Point of Sale · ${activeBranch}`}
+        crumbs={["MediLink", "Sales & Billing"]}
+        actions={
+          <button
+            onClick={() => setSafetyModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border bg-white text-blue-700 hover:bg-blue-50 transition-colors shadow-2xs"
+            style={{ borderColor: T.border }}
+          >
+            <ShieldCheck size={14} className="text-blue-600" />
+            Clinical DDI Checker
+          </button>
+        }
+      />
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
         <div className="lg:col-span-3 bg-white rounded-2xl border p-5" style={{ borderColor: T.border }}>
           <div className="relative mb-4">
@@ -470,19 +488,92 @@ export default function POSPage() {
               Hold Bill
             </Btn>
           </div>
-          {billingBlocked && (
-            <div className="flex items-center gap-1.5 text-[11px] font-medium mt-2 px-2.5 py-2 rounded-lg" style={{ background: T.amberTint, color: T.amber }}>
-              <AlertTriangle size={13} />
-              Verify {rxBlockedItems.length === 1 ? "this prescription" : "all prescriptions"} before billing.
+          {/* Clinical Drug-Drug Interaction Safety Alert */}
+          {cart.length > 0 && (() => {
+            const safety = analyzePrescriptionSafety(cart);
+            const hasCritical = safety.allIssues?.some((i) => i.severity === "Critical");
+            const ddiBlocked = hasCritical && !safetyOverride;
+
+            return (
+              <>
+                {safety.hasAlerts && (
+                  <div
+                    className={`p-2.5 rounded-xl border mt-2 text-xs ${
+                      hasCritical
+                        ? "bg-red-50 border-red-200 text-red-900"
+                        : "bg-amber-50 border-amber-200 text-amber-900"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between font-bold mb-1">
+                      <span className="flex items-center gap-1.5">
+                        {hasCritical ? (
+                          <ShieldAlert size={14} className="text-red-600" />
+                        ) : (
+                          <AlertTriangle size={14} className="text-amber-600" />
+                        )}
+                        Drug-Drug Interaction ({safety.allIssues.length})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSafetyModalOpen(true)}
+                        className="text-[11px] underline font-semibold text-blue-700 hover:text-blue-800"
+                      >
+                        Inspect
+                      </button>
+                    </div>
+                    <p className="text-[11px] leading-tight mb-2 opacity-90">
+                      {safety.allIssues[0].title}
+                    </p>
+                    {hasCritical && (
+                      <label className="flex items-center gap-2 text-[11px] font-semibold cursor-pointer pt-1.5 border-t border-red-200">
+                        <input
+                          type="checkbox"
+                          checked={safetyOverride}
+                          onChange={(e) => setSafetyOverride(e.target.checked)}
+                          className="rounded text-blue-600"
+                        />
+                        Pharmacist Clinical Override Confirmed
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                {billingBlocked && (
+                  <div className="flex items-center gap-1.5 text-[11px] font-medium mt-2 px-2.5 py-2 rounded-lg" style={{ background: T.amberTint, color: T.amber }}>
+                    <AlertTriangle size={13} />
+                    Verify {rxBlockedItems.length === 1 ? "this prescription" : "all prescriptions"} before billing.
+                  </div>
+                )}
+                {ddiBlocked && !billingBlocked && (
+                  <div className="flex items-center gap-1.5 text-[11px] font-medium mt-2 px-2.5 py-2 rounded-lg bg-red-100 text-red-800">
+                    <ShieldAlert size={13} />
+                    Severe drug interaction detected. Verify clinical override before generating bill.
+                  </div>
+                )}
+                <div className="mt-2">
+                  <Btn size="lg" onClick={generateBill} disabled={billingBlocked || ddiBlocked || cart.length === 0}>
+                    Generate Bill · {formatCurrency(grandTotal)}
+                  </Btn>
+                </div>
+              </>
+            );
+          })()}
+
+          {cart.length === 0 && (
+            <div className="mt-2">
+              <Btn size="lg" disabled>
+                Generate Bill · ₹0.00
+              </Btn>
             </div>
           )}
-          <div className="mt-2">
-            <Btn size="lg" onClick={generateBill} disabled={billingBlocked || cart.length === 0}>
-              Generate Bill · {formatCurrency(grandTotal)}
-            </Btn>
-          </div>
         </div>
       </div>
+
+      <DrugSafetyModal
+        isOpen={safetyModalOpen}
+        onClose={() => setSafetyModalOpen(false)}
+        initialMedicines={cart.length > 0 ? cart : []}
+      />
 
       <Modal
         open={!!rxRecordModal}

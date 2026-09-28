@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Receipt, ShoppingCart, Pencil } from "lucide-react";
 import { T } from "../../utils/theme.js";
 import { formatCurrency, formatDate } from "../../utils/format.js";
 import { useApp } from "../../hooks/useApp.js";
+import { useRecent } from "../../context/RecentContext.jsx";
 import { updateCustomer } from "../../services/customerService.js";
 import PageHeader from "../../components/common/PageHeader.jsx";
 import StatCard from "../../components/common/StatCard.jsx";
@@ -17,10 +18,23 @@ export default function CustomerDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { db, setDb, toast, refreshDb } = useApp();
+  const { addRecentItem } = useRecent();
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({});
 
   const c = db.customers.find((x) => x.id === id);
+
+  useEffect(() => {
+    if (c) {
+      addRecentItem({
+        id: c.id,
+        type: "Customer",
+        title: c.name,
+        subtitle: `${c.phone} · ${c.address?.slice(0, 30) || ""}`,
+        path: `/customers/${c.id}`,
+      });
+    }
+  }, [c?.id, c?.name]);
 
   if (!c) {
     return (

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Plus, Eye, Pencil } from "lucide-react";
 import { useApp } from "../../hooks/useApp.js";
 import { medicineStock, stockStatus, createMedicine, updateMedicine } from "../../services/medicineService.js";
+import { createBatch } from "../../services/batchService.js";
 import { formatCurrency } from "../../utils/format.js";
 import { T } from "../../utils/theme.js";
 import PageHeader from "../../components/common/PageHeader.jsx";
@@ -46,6 +47,16 @@ export default function MedicinesPage() {
     };
   });
 
+  const [quickStockModal, setQuickStockModal] = useState(false);
+  const [quickStockTarget, setQuickStockTarget] = useState(null);
+  const [quickStockForm, setQuickStockForm] = useState({
+    branch: "Kovilpatti Branch",
+    batchNo: "",
+    available: 100,
+    rack: "A1-01",
+    expiryDate: new Date(Date.now() + 365 * 86400000).toISOString().split("T")[0],
+  });
+
   function openAdd() {
     setEditingId(null);
     setForm({
@@ -62,8 +73,25 @@ export default function MedicinesPage() {
       gst: 12,
       rx: false,
       status: "Active",
+      initialStock: 100,
+      branch: db.branches?.[0]?.name || "Kovilpatti Branch",
+      rack: "A1-01",
+      batchNo: `BAT-${Math.floor(1000 + Math.random() * 9000)}`,
+      expiryDate: new Date(Date.now() + 365 * 86400000).toISOString().split("T")[0],
     });
     setModal(true);
+  }
+
+  function openQuickStock(med) {
+    setQuickStockTarget(med);
+    setQuickStockForm({
+      branch: db.branches?.[0]?.name || "Kovilpatti Branch",
+      batchNo: `BAT-${Math.floor(1000 + Math.random() * 9000)}`,
+      available: 100,
+      rack: "A1-01",
+      expiryDate: new Date(Date.now() + 365 * 86400000).toISOString().split("T")[0],
+    });
+    setQuickStockModal(true);
   }
 
   function openEdit(med) {
@@ -84,6 +112,58 @@ export default function MedicinesPage() {
       status: med.status || "Active",
     });
     setModal(true);
+  }
+
+  async function handleQuickStockSave() {
+    if (!quickStockTarget || !quickStockForm.batchNo || !quickStockForm.available || Number(quickStockForm.available) <= 0) {
+      toast("Please provide batch number and valid stock quantity.", "error");
+      return;
+    }
+    try {
+      const selectedBranch = db.branches.find((b) => b.name === quickStockForm.branch) || { id: "BR-01", name: quickStockForm.branch };
+      const payload = {
+        batchNo: quickStockForm.batchNo,
+        medicineId: quickStockTarget.id,
+        branchId: selectedBranch.id,
+        branchName: selectedBranch.name,
+        mfgDate: new Date().toISOString().split("T")[0],
+        expiryDate: quickStockForm.expiryDate,
+        quantity: Number(quickStockForm.available),
+        available: Number(quickStockForm.available),
+        purchasePrice: Number(quickStockTarget.purchase || 0),
+        sellingPrice: Number(quickStockTarget.selling || 0),
+        rack: quickStockForm.rack || "A1-01",
+      };
+
+      const createdBatch = await createBatch(payload);
+
+      setDb((d) => {
+        const nextBatches = [
+          {
+            id: createdBatch.id || `BAT-${Date.now().toString().slice(-4)}`,
+            medicineName: quickStockTarget.name,
+            ...payload,
+            ...createdBatch,
+          },
+          ...(d.batches || []),
+        ];
+        const nextStock = medicineStock(quickStockTarget, nextBatches);
+        const nextMeds = (d.medicines || []).map((m) =>
+          m.id === quickStockTarget.id ? { ...m, stock: nextStock } : m
+        );
+        return {
+          ...d,
+          batches: nextBatches,
+          medicines: nextMeds,
+        };
+      });
+
+      toast(`Added ${quickStockForm.available} units to ${quickStockTarget.name} successfully!`);
+      setQuickStockModal(false);
+      refreshDb?.();
+    } catch (err) {
+      toast(err.message || "Failed to add stock.", "error");
+    }
   }
 
   async function handleSave() {
@@ -130,18 +210,50 @@ export default function MedicinesPage() {
         });
         toast("Medicine updated successfully.");
       } else {
+        const initialQty = Number(form.initialStock || 0);
         let created;
         try {
           created = await createMedicine(form);
         } catch (apiErr) {
           console.warn("Backend unavailable, creating medicine locally:", apiErr.message);
-          created = { id: `MED-${String((db.medicines?.length || 0) + 1).padStart(2, "0")}`, ...form, stock: 0 };
+          created = { id: `MED-${String((db.medicines?.length || 0) + 1).padStart(2, "0")}`, ...form, stock: initialQty };
         }
+
+        let newBatch = null;
+        if (initialQty > 0) {
+          const selectedBranch = db.branches.find((b) => b.name === form.branch) || { id: "BR-01", name: form.branch || "Kovilpatti Branch" };
+          const batchPayload = {
+            batchNo: form.batchNo || `BAT-${Math.floor(1000 + Math.random() * 9000)}`,
+            medicineId: created.id,
+            branchId: selectedBranch.id,
+            branchName: selectedBranch.name,
+            mfgDate: new Date().toISOString().split("T")[0],
+            expiryDate: form.expiryDate || new Date(Date.now() + 365 * 86400000).toISOString().split("T")[0],
+            quantity: initialQty,
+            available: initialQty,
+            purchasePrice: Number(form.purchase || 0),
+            sellingPrice: Number(form.selling || 0),
+            rack: form.rack || "A1-01",
+          };
+          try {
+            const bRes = await createBatch(batchPayload);
+            newBatch = { id: bRes.id || `BAT-${Date.now().toString().slice(-4)}`, medicineName: created.name, ...batchPayload, ...bRes };
+          } catch {
+            newBatch = { id: `BAT-${Date.now().toString().slice(-4)}`, medicineName: created.name, ...batchPayload };
+          }
+        }
+
         setDb((d) => ({
           ...d,
-          medicines: [...d.medicines, created],
+          medicines: [...d.medicines, { ...created, stock: initialQty }],
+          batches: newBatch ? [newBatch, ...(d.batches || [])] : d.batches || [],
         }));
-        toast("Medicine added successfully.");
+
+        toast(
+          initialQty > 0
+            ? `Medicine and initial available stock of ${initialQty} units added successfully!`
+            : "Medicine added successfully."
+        );
       }
       setModal(false);
       refreshDb?.();
@@ -217,10 +329,11 @@ export default function MedicinesPage() {
         ]}
         onRowClick={(r) => navigate(`/medicines/${r.id}`)}
         actions={(r) => (
-          <>
-            <IconBtn icon={Eye} tone="blue" onClick={() => navigate(`/medicines/${r.id}`)} />
+          <div className="flex items-center gap-1">
+            <IconBtn icon={Plus} tone="green" title="Quick Add Stock" onClick={(e) => { e.stopPropagation(); openQuickStock(r); }} />
+            <IconBtn icon={Eye} tone="blue" title="View Details" onClick={() => navigate(`/medicines/${r.id}`)} />
             <IconBtn icon={Pencil} tone="blue" title="Edit Medicine" onClick={(e) => { e.stopPropagation(); openEdit(r); }} />
-          </>
+          </div>
         )}
       />
       <Modal
@@ -264,6 +377,105 @@ export default function MedicinesPage() {
             <option value="false">No</option>
             <option value="true">Yes</option>
           </FormSelect>
+
+          {!editingId && (
+            <div className="col-span-2 p-3.5 bg-emerald-50 rounded-xl border border-emerald-200 mt-2">
+              <span className="font-bold text-emerald-900 text-xs block mb-2.5">
+                Initial Stock & Inventory (Optional — creates initial batch automatically)
+              </span>
+              <div className="grid grid-cols-2 gap-3">
+                <FormInput
+                  label="Initial Available Stock (Units)"
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 100"
+                  value={form.initialStock || 0}
+                  onChange={(e) => setForm((f) => ({ ...f, initialStock: Number(e.target.value) }))}
+                />
+                <FormSelect
+                  label="Branch"
+                  value={form.branch || db.branches?.[0]?.name}
+                  onChange={(e) => setForm((f) => ({ ...f, branch: e.target.value }))}
+                >
+                  {db.branches.map((b) => (
+                    <option key={b.id} value={b.name}>{b.name}</option>
+                  ))}
+                </FormSelect>
+                <FormInput
+                  label="Batch Number"
+                  placeholder="e.g. BAT-2026-01"
+                  value={form.batchNo || ""}
+                  onChange={(e) => setForm((f) => ({ ...f, batchNo: e.target.value }))}
+                />
+                <FormInput
+                  label="Shelf / Rack Location"
+                  placeholder="e.g. A1-01"
+                  value={form.rack || "A1-01"}
+                  onChange={(e) => setForm((f) => ({ ...f, rack: e.target.value }))}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Quick Add Stock Modal */}
+      <Modal
+        open={quickStockModal}
+        onClose={() => setQuickStockModal(false)}
+        title={`Add Available Stock — ${quickStockTarget?.name || ""}`}
+        footer={
+          <>
+            <Btn variant="secondary" onClick={() => setQuickStockModal(false)}>
+              Cancel
+            </Btn>
+            <Btn onClick={handleQuickStockSave}>Add Stock Now</Btn>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3.5 text-xs">
+          <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900">
+            Adding inventory for <strong className="font-bold">{quickStockTarget?.name}</strong>. The entered quantity will immediately increase available stock.
+          </div>
+          <div className="grid grid-cols-2 gap-3.5">
+            <FormSelect
+              label="Select Branch"
+              required
+              value={quickStockForm.branch}
+              onChange={(e) => setQuickStockForm((f) => ({ ...f, branch: e.target.value }))}
+            >
+              {db.branches.map((b) => (
+                <option key={b.id} value={b.name}>{b.name}</option>
+              ))}
+            </FormSelect>
+            <FormInput
+              label="Batch Number"
+              required
+              placeholder="e.g. BAT-2026-01"
+              value={quickStockForm.batchNo}
+              onChange={(e) => setQuickStockForm((f) => ({ ...f, batchNo: e.target.value }))}
+            />
+            <FormInput
+              label="Available Quantity (Units to Add)"
+              required
+              type="number"
+              min="1"
+              value={quickStockForm.available}
+              onChange={(e) => setQuickStockForm((f) => ({ ...f, available: Number(e.target.value) }))}
+            />
+            <FormInput
+              label="Shelf / Rack Location"
+              value={quickStockForm.rack}
+              onChange={(e) => setQuickStockForm((f) => ({ ...f, rack: e.target.value }))}
+            />
+            <FormInput
+              label="Expiry Date"
+              required
+              type="date"
+              value={quickStockForm.expiryDate}
+              onChange={(e) => setQuickStockForm((f) => ({ ...f, expiryDate: e.target.value }))}
+            />
+          </div>
         </div>
       </Modal>
     </div>

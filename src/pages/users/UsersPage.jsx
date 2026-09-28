@@ -12,7 +12,7 @@ import { FormInput, FormSelect } from "../../components/common/FormControls.jsx"
 import { T } from "../../utils/theme.js";
 
 export default function UsersPage() {
-  const { db, setDb, toast } = useApp();
+  const { db, setDb, toast, refreshDb } = useApp();
   const [modal, setModal] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
   const [form, setForm] = useState({});
@@ -40,10 +40,11 @@ export default function UsersPage() {
         toast("User created successfully.");
       } else {
         const updated = await updateUser(modal.id, form);
-        setDb((d) => ({ ...d, users: d.users.map((u) => (u.id === modal.id ? updated : u)) }));
+        setDb((d) => ({ ...d, users: d.users.map((u) => (u.id === modal.id ? { ...u, ...form, ...updated } : u)) }));
         toast("User updated successfully.");
       }
       setModal(null);
+      refreshDb?.();
     } catch (err) {
       toast(err.message || "Failed to save user.", "error");
     }
@@ -51,9 +52,10 @@ export default function UsersPage() {
 
   async function toggle(u) {
     try {
-      const res = await toggleUserStatus(u.id);
+      const res = await toggleUserStatus(u.id, u.status);
       setDb((d) => ({ ...d, users: d.users.map((x) => (x.id === u.id ? { ...x, status: res.status } : x)) }));
       toast(`${u.name} ${res.status === "Active" ? "activated" : "deactivated"}.`);
+      refreshDb?.();
     } catch (err) {
       toast(err.message || "Failed to toggle status.", "error");
     }
@@ -65,6 +67,7 @@ export default function UsersPage() {
       setDb((d) => ({ ...d, users: d.users.filter((x) => x.id !== u.id) }));
       toast("User deleted.");
       setConfirmDel(null);
+      refreshDb?.();
     } catch (err) {
       toast(err.message || "Failed to delete user.", "error");
       setConfirmDel(null);

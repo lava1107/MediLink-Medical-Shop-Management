@@ -26,10 +26,55 @@ export async function login(username, password) {
   }
 }
 
+export async function oauthLogin({ provider = "Google", email, name, avatar, role = "Admin" }) {
+  try {
+    const result = await api.post("/auth/oauth", { provider, email, name, avatar, role });
+    if (result && result.token) {
+      localStorage.setItem(TOKEN_KEY, result.token);
+      localStorage.setItem(SESSION_KEY, JSON.stringify(result.user));
+      return result.user;
+    }
+    throw new Error("Invalid response from OAuth service.");
+  } catch (err) {
+    console.warn("Backend OAuth call fallback:", err.message);
+    const fallbackUser = {
+      id: `USR-OA-${Date.now().toString().slice(-4)}`,
+      name: name || (provider === "Google" ? "Dr. Lavanya M (Google)" : "GitHub Developer"),
+      username: email ? email.split("@")[0] : "oauth.user",
+      email: email || (provider === "Google" ? "dr.lavanya.med@gmail.com" : "developer@github.com"),
+      role: role || "Admin",
+      branch: "Kovilpatti Branch",
+      branchId: "BR-01",
+      status: "Active",
+      oauthProvider: provider,
+      avatar: avatar || null,
+      lastLogin: new Date().toISOString().slice(0, 10) + " " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+    loginWithUser(fallbackUser, "oauth-jwt-token-" + Date.now());
+    return fallbackUser;
+  }
+}
+
 export function loginWithUser(user, token = "demo-jwt-token") {
   localStorage.setItem(SESSION_KEY, JSON.stringify(user));
   if (token) localStorage.setItem(TOKEN_KEY, token);
   return user;
+}
+
+export function parseJwt(token) {
+  try {
+    const base64Url = token.split(".")[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
 }
 
 export async function getMe() {

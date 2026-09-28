@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { useApp } from "../../hooks/useApp.js";
 import { formatCurrency, formatDate } from "../../utils/format.js";
-import { updateBatch } from "../../services/batchService.js";
+import { createBatch, updateBatch } from "../../services/batchService.js";
 import { medicineStock } from "../../services/medicineService.js";
 import PageHeader from "../../components/common/PageHeader.jsx";
 import DataTable from "../../components/tables/DataTable.jsx";
@@ -27,6 +27,91 @@ export default function BatchesPage() {
     sellingPrice: 0,
     status: "Safe",
   });
+
+  const [addBatchModal, setAddBatchModal] = useState(false);
+  const [addBatchForm, setAddBatchForm] = useState({
+    medicineId: "",
+    branchName: "Kovilpatti Branch",
+    batchNo: "",
+    available: 100,
+    quantity: 100,
+    mfgDate: new Date().toISOString().split("T")[0],
+    expiryDate: new Date(Date.now() + 365 * 86400000).toISOString().split("T")[0],
+    rack: "A1-01",
+    purchasePrice: 0,
+    sellingPrice: 0,
+  });
+
+  function openAddBatch() {
+    const firstMed = db.medicines?.[0];
+    setAddBatchForm({
+      medicineId: firstMed?.id || "",
+      branchName: db.branches?.[0]?.name || "Kovilpatti Branch",
+      batchNo: `BAT-${Math.floor(1000 + Math.random() * 9000)}`,
+      available: 100,
+      quantity: 100,
+      mfgDate: new Date().toISOString().split("T")[0],
+      expiryDate: new Date(Date.now() + 365 * 86400000).toISOString().split("T")[0],
+      rack: "A1-01",
+      purchasePrice: firstMed?.purchase || 0,
+      sellingPrice: firstMed?.selling || 0,
+    });
+    setAddBatchModal(true);
+  }
+
+  async function handleSaveAddBatch() {
+    if (!addBatchForm.medicineId || !addBatchForm.batchNo || addBatchForm.available === undefined) {
+      toast("Please select a medicine and enter batch number and available quantity.", "error");
+      return;
+    }
+    try {
+      const med = db.medicines.find((m) => m.id === addBatchForm.medicineId) || { id: addBatchForm.medicineId, name: "Medicine" };
+      const selectedBranch = db.branches.find((b) => b.name === addBatchForm.branchName) || { id: "BR-01", name: addBatchForm.branchName };
+
+      const payload = {
+        batchNo: addBatchForm.batchNo,
+        medicineId: med.id,
+        branchId: selectedBranch.id,
+        branchName: selectedBranch.name,
+        mfgDate: addBatchForm.mfgDate,
+        expiryDate: addBatchForm.expiryDate,
+        quantity: Number(addBatchForm.quantity || addBatchForm.available),
+        available: Number(addBatchForm.available),
+        purchasePrice: Number(addBatchForm.purchasePrice || med.purchase || 0),
+        sellingPrice: Number(addBatchForm.sellingPrice || med.selling || 0),
+        rack: addBatchForm.rack || "A1-01",
+      };
+
+      const created = await createBatch(payload);
+
+      setDb((d) => {
+        const nextBatches = [
+          {
+            id: created.id || `BAT-${Date.now().toString().slice(-4)}`,
+            medicineName: med.name,
+            ...payload,
+            ...created,
+          },
+          ...(d.batches || []),
+        ];
+        const nextStock = medicineStock(med, nextBatches);
+        const nextMeds = (d.medicines || []).map((m) =>
+          m.id === med.id ? { ...m, stock: nextStock } : m
+        );
+        return {
+          ...d,
+          batches: nextBatches,
+          medicines: nextMeds,
+        };
+      });
+
+      toast(`Added batch ${addBatchForm.batchNo} (${addBatchForm.available} units) successfully!`);
+      setAddBatchModal(false);
+      refreshDb?.();
+    } catch (err) {
+      toast(err.message || "Failed to create batch.", "error");
+    }
+  }
 
   function openEdit(b) {
     setEditingBatch(b);
@@ -91,6 +176,11 @@ export default function BatchesPage() {
         title="Medicine Batch Management"
         subtitle="Track batch-level stock, rack location and expiry"
         crumbs={["MediLink", "Medicine Batches"]}
+        action={
+          <Btn icon={Plus} onClick={openAddBatch}>
+            Add Batch / Stock
+          </Btn>
+        }
       />
       <DataTable
         columns={[
@@ -197,6 +287,119 @@ export default function BatchesPage() {
               <option value="Expiring Soon">Expiring Soon</option>
               <option value="Expired">Expired</option>
             </FormSelect>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Add New Batch / Stock Modal */}
+      <Modal
+        open={addBatchModal}
+        onClose={() => setAddBatchModal(false)}
+        title="Add New Batch / Stock"
+        footer={
+          <>
+            <Btn variant="secondary" onClick={() => setAddBatchModal(false)}>
+              Cancel
+            </Btn>
+            <Btn onClick={handleSaveAddBatch}>Create Batch</Btn>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3.5 text-xs">
+          <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900">
+            Create a new batch to immediately add available stock to any medicine at any branch.
+          </div>
+          <div className="grid grid-cols-2 gap-3.5">
+            <div className="col-span-2">
+              <FormSelect
+                label="Select Medicine"
+                required
+                value={addBatchForm.medicineId}
+                onChange={(e) => {
+                  const mId = e.target.value;
+                  const found = db.medicines.find((x) => x.id === mId);
+                  setAddBatchForm((f) => ({
+                    ...f,
+                    medicineId: mId,
+                    purchasePrice: found?.purchase || f.purchasePrice,
+                    sellingPrice: found?.selling || f.sellingPrice,
+                  }));
+                }}
+              >
+                <option value="">-- Choose Medicine --</option>
+                {db.medicines.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} ({m.generic} · {m.strength})
+                  </option>
+                ))}
+              </FormSelect>
+            </div>
+            <FormSelect
+              label="Branch"
+              required
+              value={addBatchForm.branchName}
+              onChange={(e) => setAddBatchForm((f) => ({ ...f, branchName: e.target.value }))}
+            >
+              {db.branches.map((b) => (
+                <option key={b.id} value={b.name}>
+                  {b.name}
+                </option>
+              ))}
+            </FormSelect>
+            <FormInput
+              label="Batch Number"
+              required
+              placeholder="e.g. BAT-2026-01"
+              value={addBatchForm.batchNo}
+              onChange={(e) => setAddBatchForm((f) => ({ ...f, batchNo: e.target.value }))}
+            />
+            <FormInput
+              label="Available Quantity (Stock to Add)"
+              required
+              type="number"
+              min="1"
+              value={addBatchForm.available}
+              onChange={(e) =>
+                setAddBatchForm((f) => ({
+                  ...f,
+                  available: Number(e.target.value),
+                  quantity: Number(e.target.value),
+                }))
+              }
+            />
+            <FormInput
+              label="Rack / Shelf Location"
+              value={addBatchForm.rack}
+              onChange={(e) => setAddBatchForm((f) => ({ ...f, rack: e.target.value }))}
+            />
+            <FormInput
+              label="Manufacturing Date"
+              required
+              type="date"
+              value={addBatchForm.mfgDate}
+              onChange={(e) => setAddBatchForm((f) => ({ ...f, mfgDate: e.target.value }))}
+            />
+            <FormInput
+              label="Expiry Date"
+              required
+              type="date"
+              value={addBatchForm.expiryDate}
+              onChange={(e) => setAddBatchForm((f) => ({ ...f, expiryDate: e.target.value }))}
+            />
+            <FormInput
+              label="Purchase Price (₹)"
+              type="number"
+              min="0"
+              value={addBatchForm.purchasePrice}
+              onChange={(e) => setAddBatchForm((f) => ({ ...f, purchasePrice: Number(e.target.value) }))}
+            />
+            <FormInput
+              label="Selling Price (₹)"
+              type="number"
+              min="0"
+              value={addBatchForm.sellingPrice}
+              onChange={(e) => setAddBatchForm((f) => ({ ...f, sellingPrice: Number(e.target.value) }))}
+            />
           </div>
         </div>
       </Modal>

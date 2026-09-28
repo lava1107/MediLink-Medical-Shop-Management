@@ -1,10 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, MapPinned, CalendarClock, Pencil } from "lucide-react";
+import { ArrowLeft, MapPinned, CalendarClock, Pencil, Plus } from "lucide-react";
 import { T } from "../../utils/theme.js";
 import { formatCurrency, formatDate } from "../../utils/format.js";
 import { useApp } from "../../hooks/useApp.js";
+import { useAuth } from "../../hooks/useAuth.js";
+import { useRecent } from "../../context/RecentContext.jsx";
 import { stockStatus, updateMedicine, medicineStock } from "../../services/medicineService.js";
+import { createBatch, updateBatch } from "../../services/batchService.js";
 import PageHeader from "../../components/common/PageHeader.jsx";
 import StatusBadge from "../../components/common/StatusBadge.jsx";
 import Btn from "../../components/common/Btn.jsx";
@@ -16,10 +19,49 @@ export default function MedicineDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { db, setDb, toast, refreshDb } = useApp();
+  const { currentBranch } = useAuth();
+  const { addRecentItem } = useRecent();
   const [editModal, setEditModal] = useState(false);
   const [form, setForm] = useState({});
 
+  // Add Stock / Batch state
+  const [addStockModal, setAddStockModal] = useState(false);
+  const [stockForm, setStockForm] = useState({
+    branch: "Kovilpatti Branch",
+    batchNo: "",
+    quantity: 100,
+    available: 100,
+    mfgDate: new Date().toISOString().split("T")[0],
+    expiryDate: new Date(Date.now() + 365 * 86400000).toISOString().split("T")[0],
+    rack: "A1-01",
+    purchasePrice: 0,
+    sellingPrice: 0,
+  });
+
+  // Edit Batch state
+  const [editBatchModal, setEditBatchModal] = useState(false);
+  const [editingBatch, setEditingBatch] = useState(null);
+  const [batchEditForm, setBatchEditForm] = useState({
+    available: 0,
+    quantity: 0,
+    rack: "",
+    expiryDate: "",
+    sellingPrice: 0,
+  });
+
   const med = db.medicines.find((m) => m.id === id);
+
+  useEffect(() => {
+    if (med) {
+      addRecentItem({
+        id: med.id,
+        type: "Medicine",
+        title: med.name,
+        subtitle: `${med.generic || med.brand || "Medicine"} · ${med.dosage || ""}`,
+        path: `/medicines/${med.id}`,
+      });
+    }
+  }, [med?.id, med?.name]);
 
   if (!med) {
     return (
@@ -57,6 +99,128 @@ export default function MedicineDetailPage() {
       status: med.status || "Active",
     });
     setEditModal(true);
+  }
+
+  function openAddStock() {
+    const defaultBranch = currentBranch && currentBranch !== "All" && currentBranch !== "All Branches"
+      ? currentBranch
+      : db.branches?.[0]?.name || "Kovilpatti Branch";
+    setStockForm({
+      branch: defaultBranch,
+      batchNo: `BAT-${Math.floor(1000 + Math.random() * 9000)}`,
+      quantity: 100,
+      available: 100,
+      mfgDate: new Date().toISOString().split("T")[0],
+      expiryDate: new Date(Date.now() + 365 * 86400000).toISOString().split("T")[0],
+      rack: "A1-01",
+      purchasePrice: med.purchase || 0,
+      sellingPrice: med.selling || 0,
+    });
+    setAddStockModal(true);
+  }
+
+  function openEditBatch(b) {
+    setEditingBatch(b);
+    setBatchEditForm({
+      available: b.available !== undefined ? b.available : b.quantity,
+      quantity: b.quantity || b.available || 0,
+      rack: b.rack || "A1-01",
+      expiryDate: b.expiryDate ? b.expiryDate.split("T")[0] : "",
+      sellingPrice: b.sellingPrice || med.selling || 0,
+    });
+    setEditBatchModal(true);
+  }
+
+  async function handleSaveStock() {
+    if (!stockForm.batchNo || stockForm.available === undefined || Number(stockForm.available) < 0) {
+      toast("Please provide batch number and valid available quantity.", "error");
+      return;
+    }
+    try {
+      const selectedBranch = db.branches.find((b) => b.name === stockForm.branch) || { id: "BR-01", name: stockForm.branch };
+      const payload = {
+        batchNo: stockForm.batchNo,
+        medicineId: med.id,
+        branchId: selectedBranch.id,
+        branchName: selectedBranch.name,
+        mfgDate: stockForm.mfgDate,
+        expiryDate: stockForm.expiryDate,
+        quantity: Number(stockForm.quantity || stockForm.available),
+        available: Number(stockForm.available),
+        purchasePrice: Number(stockForm.purchasePrice || med.purchase || 0),
+        sellingPrice: Number(stockForm.sellingPrice || med.selling || 0),
+        rack: stockForm.rack || "A1-01",
+      };
+
+      const created = await createBatch(payload);
+
+      setDb((d) => {
+        const nextBatches = [
+          {
+            id: created.id || `BAT-${Date.now().toString().slice(-4)}`,
+            medicineName: med.name,
+            ...payload,
+            ...created,
+          },
+          ...(d.batches || []),
+        ];
+        const nextStock = medicineStock(med, nextBatches);
+        const nextMeds = (d.medicines || []).map((m) =>
+          m.id === med.id ? { ...m, stock: nextStock } : m
+        );
+        return {
+          ...d,
+          batches: nextBatches,
+          medicines: nextMeds,
+        };
+      });
+
+      toast(`Added ${stockForm.available} units to ${med.name} successfully!`);
+      setAddStockModal(false);
+      refreshDb?.();
+    } catch (err) {
+      toast(err.message || "Failed to add stock.", "error");
+    }
+  }
+
+  async function handleSaveBatchEdit() {
+    if (!editingBatch || batchEditForm.available === undefined || Number(batchEditForm.available) < 0) {
+      toast("Please enter a valid available quantity.", "error");
+      return;
+    }
+    try {
+      const payload = {
+        ...editingBatch,
+        available: Number(batchEditForm.available),
+        quantity: Number(batchEditForm.quantity || editingBatch.quantity),
+        rack: batchEditForm.rack || editingBatch.rack,
+        expiryDate: batchEditForm.expiryDate || editingBatch.expiryDate,
+        sellingPrice: Number(batchEditForm.sellingPrice || editingBatch.sellingPrice),
+      };
+
+      const updated = await updateBatch(editingBatch.id, payload);
+
+      setDb((d) => {
+        const nextBatches = (d.batches || []).map((b) =>
+          b.id === editingBatch.id ? { ...b, ...payload, ...updated } : b
+        );
+        const nextStock = medicineStock(med, nextBatches);
+        const nextMeds = (d.medicines || []).map((m) =>
+          m.id === med.id ? { ...m, stock: nextStock } : m
+        );
+        return {
+          ...d,
+          batches: nextBatches,
+          medicines: nextMeds,
+        };
+      });
+
+      toast(`Batch ${editingBatch.batchNo} stock updated to ${batchEditForm.available} units.`);
+      setEditBatchModal(false);
+      refreshDb?.();
+    } catch (err) {
+      toast(err.message || "Failed to update batch stock.", "error");
+    }
   }
 
   async function handleSaveEdit() {
@@ -122,8 +286,11 @@ export default function MedicineDetailPage() {
               Available: {availQty} units
             </span>
             <StatusBadge status={stockStatus(availQty)} />
-            <Btn icon={Pencil} size="sm" onClick={openEdit}>
-              Edit Medicine
+            <Btn icon={Plus} size="sm" onClick={openAddStock}>
+              Add Stock / Batch
+            </Btn>
+            <Btn icon={Pencil} size="sm" variant="secondary" onClick={openEdit}>
+              Edit Details
             </Btn>
           </div>
         }
@@ -188,11 +355,20 @@ export default function MedicineDetailPage() {
                 {totalQty}
               </span>
             </div>
-            <div className="flex justify-between items-center bg-emerald-50 px-2.5 py-1.5 rounded-lg border border-emerald-200">
-              <span className="font-semibold text-emerald-900">Available Quantity</span>
-              <span className="font-bold text-emerald-700 text-base">
-                {availQty} units
-              </span>
+            <div className="flex justify-between items-center bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-200">
+              <div>
+                <span className="font-bold text-emerald-900 text-xs block">Available Quantity</span>
+                <span className="font-extrabold text-emerald-700 text-lg">
+                  {availQty} units
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={openAddStock}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all cursor-pointer"
+              >
+                <Plus size={14} /> Add Stock
+              </button>
             </div>
             <div className="flex justify-between">
               <span style={{ color: "#9AA6B2" }}>Number of Batches</span>
@@ -213,8 +389,11 @@ export default function MedicineDetailPage() {
               : " This medicine is available over the counter."}
           </p>
           <div className="mt-4 flex flex-col gap-2">
+            <Btn variant="secondary" size="sm" icon={Plus} onClick={openAddStock}>
+              Add New Batch / Stock
+            </Btn>
             <Btn variant="secondary" size="sm" icon={MapPinned} onClick={() => navigate("/availability")}>
-              Check Availability
+              Check Other Branches
             </Btn>
             <Btn variant="secondary" size="sm" icon={CalendarClock} onClick={() => navigate("/reservations")}>
               Reserve for Customer
@@ -223,14 +402,21 @@ export default function MedicineDetailPage() {
         </div>
       </div>
       <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: T.border }}>
-        <div className="px-5 py-4 border-b font-bold text-sm" style={{ borderColor: T.border, color: T.navy }}>
-          Batch List
+        <div className="flex items-center justify-between px-5 py-4 border-b font-bold text-sm" style={{ borderColor: T.border, color: T.navy }}>
+          <span>Batch & Inventory List</span>
+          <button
+            type="button"
+            onClick={openAddStock}
+            className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors cursor-pointer"
+          >
+            <Plus size={13} /> Add Batch
+          </button>
         </div>
         <table className="w-full text-xs">
           <thead>
             <tr style={{ background: T.blueTint2 }}>
-              {["Batch No.", "Branch", "Rack / Shelf", "Mfg Date", "Expiry Date", "Quantity", "Selling Price", "Status"].map((h) => (
-                <th key={h} className="text-left px-4 py-2.5 font-semibold" style={{ color: T.navySoft }}>
+              {["Batch No.", "Branch", "Rack / Shelf", "Mfg Date", "Expiry Date", "Stock (Avail / Total)", "Selling Price", "Status", "Action"].map((h, i) => (
+                <th key={h} className={`px-4 py-2.5 font-semibold ${i === 8 ? "text-right" : "text-left"}`} style={{ color: T.navySoft }}>
                   {h}
                 </th>
               ))}
@@ -238,8 +424,8 @@ export default function MedicineDetailPage() {
           </thead>
           <tbody>
             {batches.map((b) => (
-              <tr key={b.id} className="border-t" style={{ borderColor: T.borderSoft }}>
-                <td className="px-4 py-2.5 font-medium" style={{ color: T.navy }}>
+              <tr key={b.id} className="border-t hover:bg-slate-50 transition-colors" style={{ borderColor: T.borderSoft }}>
+                <td className="px-4 py-2.5 font-semibold" style={{ color: T.navy }}>
                   {b.batchNo}
                 </td>
                 <td className="px-4 py-2.5" style={{ color: T.navySoft }}>
@@ -256,21 +442,188 @@ export default function MedicineDetailPage() {
                 <td className="px-4 py-2.5" style={{ color: T.navySoft }}>
                   {formatDate(b.expiryDate)}
                 </td>
-                <td className="px-4 py-2.5" style={{ color: T.navySoft }}>
-                  {b.available} / {b.quantity}
+                <td className="px-4 py-2.5">
+                  <span className="font-bold text-emerald-700">{b.available}</span>
+                  <span className="text-slate-400"> / {b.quantity}</span>
                 </td>
-                <td className="px-4 py-2.5" style={{ color: T.navySoft }}>
+                <td className="px-4 py-2.5 font-semibold" style={{ color: T.navy }}>
                   {formatCurrency(b.sellingPrice)}
                 </td>
                 <td className="px-4 py-2.5">
                   <StatusBadge status={b.status} />
                 </td>
+                <td className="px-4 py-2.5 text-right">
+                  <button
+                    type="button"
+                    onClick={() => openEditBatch(b)}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 font-semibold text-[11px] transition-colors cursor-pointer"
+                    title="Adjust stock quantity or details"
+                  >
+                    <Pencil size={11} /> Adjust Qty
+                  </button>
+                </td>
               </tr>
             ))}
+            {batches.length === 0 && (
+              <tr>
+                <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                  No batches added yet. Click &quot;Add Stock / Batch&quot; above to add inventory.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
+      {/* Modal 1: Add Stock / Batch */}
+      <Modal
+        open={addStockModal}
+        onClose={() => setAddStockModal(false)}
+        title={`Add Stock / New Batch — ${med.name}`}
+        footer={
+          <>
+            <Btn variant="secondary" onClick={() => setAddStockModal(false)}>
+              Cancel
+            </Btn>
+            <Btn onClick={handleSaveStock}>Add Stock Now</Btn>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3.5 text-xs">
+          <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900">
+            Adding inventory for <strong className="font-bold">{med.name}</strong> ({med.generic} · {med.strength}).
+            The entered available quantity will immediately increase total stock for the selected branch.
+          </div>
+          <div className="grid grid-cols-2 gap-3.5">
+            <FormSelect
+              label="Select Branch"
+              required
+              value={stockForm.branch}
+              onChange={(e) => setStockForm((f) => ({ ...f, branch: e.target.value }))}
+            >
+              {db.branches.map((b) => (
+                <option key={b.id} value={b.name}>
+                  {b.name}
+                </option>
+              ))}
+            </FormSelect>
+            <FormInput
+              label="Batch Number"
+              required
+              placeholder="e.g. BAT-2026-01"
+              value={stockForm.batchNo}
+              onChange={(e) => setStockForm((f) => ({ ...f, batchNo: e.target.value }))}
+            />
+            <FormInput
+              label="Available Quantity (Units to Add)"
+              required
+              type="number"
+              min="1"
+              placeholder="e.g. 100"
+              value={stockForm.available}
+              onChange={(e) =>
+                setStockForm((f) => ({
+                  ...f,
+                  available: Number(e.target.value),
+                  quantity: Number(e.target.value),
+                }))
+              }
+            />
+            <FormInput
+              label="Rack / Shelf Location"
+              placeholder="e.g. A1-02"
+              value={stockForm.rack}
+              onChange={(e) => setStockForm((f) => ({ ...f, rack: e.target.value }))}
+            />
+            <FormInput
+              label="Manufacturing Date"
+              required
+              type="date"
+              value={stockForm.mfgDate}
+              onChange={(e) => setStockForm((f) => ({ ...f, mfgDate: e.target.value }))}
+            />
+            <FormInput
+              label="Expiry Date"
+              required
+              type="date"
+              value={stockForm.expiryDate}
+              onChange={(e) => setStockForm((f) => ({ ...f, expiryDate: e.target.value }))}
+            />
+            <FormInput
+              label="Purchase Price (₹)"
+              type="number"
+              min="0"
+              value={stockForm.purchasePrice}
+              onChange={(e) => setStockForm((f) => ({ ...f, purchasePrice: Number(e.target.value) }))}
+            />
+            <FormInput
+              label="Selling Price (₹)"
+              type="number"
+              min="0"
+              value={stockForm.sellingPrice}
+              onChange={(e) => setStockForm((f) => ({ ...f, sellingPrice: Number(e.target.value) }))}
+            />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal 2: Adjust Batch Quantity & Details */}
+      <Modal
+        open={editBatchModal}
+        onClose={() => setEditBatchModal(false)}
+        title={`Adjust Stock — Batch ${editingBatch?.batchNo || ""}`}
+        footer={
+          <>
+            <Btn variant="secondary" onClick={() => setEditBatchModal(false)}>
+              Cancel
+            </Btn>
+            <Btn onClick={handleSaveBatchEdit}>Save Adjusted Stock</Btn>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3.5 text-xs">
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900">
+            Adjusting stock for batch <strong className="font-bold">{editingBatch?.batchNo}</strong> at {editingBatch?.branchName}.
+          </div>
+          <div className="grid grid-cols-2 gap-3.5">
+            <FormInput
+              label="Available Quantity"
+              required
+              type="number"
+              min="0"
+              value={batchEditForm.available}
+              onChange={(e) => setBatchEditForm((f) => ({ ...f, available: Number(e.target.value) }))}
+            />
+            <FormInput
+              label="Total Initial Quantity"
+              type="number"
+              min="0"
+              value={batchEditForm.quantity}
+              onChange={(e) => setBatchEditForm((f) => ({ ...f, quantity: Number(e.target.value) }))}
+            />
+            <FormInput
+              label="Rack / Shelf Location"
+              value={batchEditForm.rack}
+              onChange={(e) => setBatchEditForm((f) => ({ ...f, rack: e.target.value }))}
+            />
+            <FormInput
+              label="Expiry Date"
+              type="date"
+              value={batchEditForm.expiryDate}
+              onChange={(e) => setBatchEditForm((f) => ({ ...f, expiryDate: e.target.value }))}
+            />
+            <FormInput
+              label="Selling Price (₹)"
+              type="number"
+              min="0"
+              value={batchEditForm.sellingPrice}
+              onChange={(e) => setBatchEditForm((f) => ({ ...f, sellingPrice: Number(e.target.value) }))}
+            />
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal 3: Edit Medicine Details */}
       <Modal
         open={editModal}
         onClose={() => setEditModal(false)}

@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import Sidebar from "../components/layout/Sidebar.jsx";
 import Navbar from "../components/layout/Navbar.jsx";
 import Toast from "../components/common/Toast.jsx";
+import MediBot from "../components/chat/MediBot.jsx";
 import { useApp } from "../hooks/useApp.js";
 import { T } from "../utils/theme.js";
 
@@ -21,6 +22,7 @@ export default function AppLayout() {
           </main>
         </div>
       </div>
+      <MediBot />
       <Toast toasts={toasts} />
     </>
   );

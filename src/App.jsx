@@ -28,6 +28,7 @@ import ReportsPage from "./pages/reports/ReportsPage.jsx";
 import ReportDetailPage from "./pages/reports/ReportDetailPage.jsx";
 import NotificationsPage from "./pages/notifications/NotificationsPage.jsx";
 import SettingsPage from "./pages/settings/SettingsPage.jsx";
+import ApiAccessPage from "./pages/api/ApiAccessPage.jsx";
 
 export default function App() {
   return (
@@ -64,6 +65,7 @@ export default function App() {
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/reports/:key" element={<ReportDetailPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/api-access" element={<ApiAccessPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Route>

@@ -1,20 +1,29 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ShoppingCart, Receipt, UserRound, CalendarClock, CircleAlert, CalendarX2, Search, MapPinned, Handshake } from "lucide-react";
+import {
+  ShoppingCart, Receipt, UserRound, CalendarClock, CircleAlert, CalendarX2, Search,
+  MapPinned, Handshake, Clock, ArrowUpRight, ShieldCheck,
+} from "lucide-react";
 import { T } from "../../utils/theme.js";
 import { formatCurrency, formatDate } from "../../utils/format.js";
 import { TODAY } from "../../data/mockData.js";
 import { useAuth } from "../../hooks/useAuth.js";
 import { useApp } from "../../hooks/useApp.js";
+import { useRecent } from "../../context/RecentContext.jsx";
+import { useTranslation } from "../../context/LanguageContext.jsx";
 import PageHeader from "../../components/common/PageHeader.jsx";
 import StatCard from "../../components/common/StatCard.jsx";
 import StatusBadge from "../../components/common/StatusBadge.jsx";
 import Btn from "../../components/common/Btn.jsx";
+import DrugSafetyModal from "../../components/common/DrugSafetyModal.jsx";
 
 export default function PharmacistDashboard() {
   const { user } = useAuth();
   const { db } = useApp();
+  const { t } = useTranslation();
+  const { recentItems } = useRecent();
   const navigate = useNavigate();
+  const [safetyModalOpen, setSafetyModalOpen] = useState(false);
 
   const branchSales = db.sales.filter((s) => s.branch === user.branch);
   const todaySales = branchSales.filter((s) => s.date === TODAY).reduce((a, s) => a + s.amount, 0);
@@ -26,36 +35,90 @@ export default function PharmacistDashboard() {
 
   return (
     <div>
-      <PageHeader title={`Welcome back, ${user.name.split(" ")[0]}`} subtitle={`${user.branch} · Thursday, 20 August 2026`} />
+      <PageHeader
+        title={`Welcome back, ${user.name.split(" ")[0]}`}
+        subtitle={`${user.branch} · Thursday, 20 August 2026 · RFC 7519 JWT Active`}
+        actions={
+          <button
+            onClick={() => setSafetyModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border bg-white text-blue-700 hover:bg-blue-50 text-xs font-semibold shadow-2xs"
+            style={{ borderColor: T.border }}
+          >
+            <ShieldCheck size={14} className="text-blue-600" />
+            Clinical DDI Safety
+          </button>
+        }
+      />
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-        <StatCard icon={ShoppingCart} label="Today's Sales" value={formatCurrency(todaySales)} tone="green" onClick={() => navigate("/reports/daily-sales")} />
+        <StatCard icon={ShoppingCart} label={t("totalSales", "Today's Sales")} value={formatCurrency(todaySales)} tone="green" onClick={() => navigate("/reports/daily-sales")} />
         <StatCard icon={Receipt} label="Today's Bills" value={todayBills} tone="blue" onClick={() => navigate("/reports/daily-sales")} />
         <StatCard icon={UserRound} label="Customers Served" value={new Set(branchSales.map((s) => s.customer)).size} tone="navy" onClick={() => navigate("/customers")} />
-        <StatCard icon={CalendarClock} label="Pending Reservations" value={pendingRes} tone="amber" onClick={() => navigate("/reservations")} />
-        <StatCard icon={CircleAlert} label="Low Stock" value={lowStock} tone="amber" onClick={() => navigate("/reports/low-stock")} />
-        <StatCard icon={CalendarX2} label="Expiring Medicines" value={nearExpiry} tone="red" onClick={() => navigate("/reports/near-expiry")} />
+        <StatCard icon={CalendarClock} label={t("pendingReservations", "Pending Reservations")} value={pendingRes} tone="amber" onClick={() => navigate("/reservations")} />
+        <StatCard icon={CircleAlert} label={t("lowStock", "Low Stock")} value={lowStock} tone="amber" onClick={() => navigate("/reports/low-stock")} />
+        <StatCard icon={CalendarX2} label={t("nearExpiry", "Expiring Medicines")} value={nearExpiry} tone="red" onClick={() => navigate("/reports/near-expiry")} />
       </div>
 
-      <div className="bg-white rounded-2xl border p-5 mb-5" style={{ borderColor: T.border }}>
-        <h3 className="font-bold text-sm mb-3" style={{ color: T.navy }}>
-          Quick Actions
-        </h3>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
-          <Btn variant="primary" icon={ShoppingCart} onClick={() => navigate("/sales")}>
-            New Bill
-          </Btn>
-          <Btn variant="secondary" icon={Search} onClick={() => navigate("/medicines")}>
-            Search Medicine
-          </Btn>
-          <Btn variant="secondary" icon={MapPinned} onClick={() => navigate("/availability")}>
-            Check Other Branch
-          </Btn>
-          <Btn variant="secondary" icon={Handshake} onClick={() => navigate("/partners")}>
-            Check Partner Shop
-          </Btn>
-          <Btn variant="secondary" icon={CalendarClock} onClick={() => navigate("/reservations")}>
-            Reserve Medicine
-          </Btn>
+      {/* Row: Quick Actions & Recently Accessed */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5">
+        <div className="lg:col-span-7 bg-white rounded-2xl border p-5" style={{ borderColor: T.border }}>
+          <h3 className="font-bold text-sm mb-3" style={{ color: T.navy }}>
+            Quick Actions
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            <Btn variant="primary" icon={ShoppingCart} onClick={() => navigate("/sales")}>
+              New Bill
+            </Btn>
+            <Btn variant="secondary" icon={Search} onClick={() => navigate("/medicines")}>
+              Search Medicine
+            </Btn>
+            <Btn variant="secondary" icon={MapPinned} onClick={() => navigate("/availability")}>
+              Check Other Branch
+            </Btn>
+            <Btn variant="secondary" icon={Handshake} onClick={() => navigate("/partners")}>
+              Check Partner Shop
+            </Btn>
+            <Btn variant="secondary" icon={CalendarClock} onClick={() => navigate("/reservations")}>
+              Reserve Medicine
+            </Btn>
+            <Btn variant="secondary" icon={ShieldCheck} onClick={() => setSafetyModalOpen(true)}>
+              DDI Safety
+            </Btn>
+          </div>
+        </div>
+
+        {/* Recently Accessed on Pharmacist Dashboard */}
+        <div className="lg:col-span-5 bg-white rounded-2xl border p-5" style={{ borderColor: T.border }}>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+              <Clock size={14} className="text-blue-600" />
+              {t("recentItems", "Recently Accessed")}
+            </h3>
+            <span className="text-[10px] text-slate-400 font-semibold">{recentItems.length} records</span>
+          </div>
+
+          <div className="divide-y text-xs" style={{ borderColor: T.borderSoft }}>
+            {recentItems.length === 0 ? (
+              <div className="py-4 text-center text-slate-400 text-xs">
+                {t("noRecent", "No recently accessed records yet")}
+              </div>
+            ) : (
+              recentItems.slice(0, 3).map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => navigate(item.path)}
+                  className="w-full text-left py-2 flex items-center justify-between hover:bg-slate-50 px-1 rounded-lg transition-colors group"
+                >
+                  <div className="min-w-0 pr-2">
+                    <div className="font-semibold text-slate-800 truncate group-hover:text-blue-600">
+                      {item.title}
+                    </div>
+                    <div className="text-[10px] text-slate-400 truncate">{item.subtitle}</div>
+                  </div>
+                  <ArrowUpRight size={13} className="text-slate-300 group-hover:text-blue-600 shrink-0" />
+                </button>
+              ))
+            )}
+          </div>
         </div>
       </div>
 
@@ -101,6 +164,7 @@ export default function PharmacistDashboard() {
           </tbody>
         </table>
       </div>
+      <DrugSafetyModal isOpen={safetyModalOpen} onClose={() => setSafetyModalOpen(false)} />
     </div>
   );
 }

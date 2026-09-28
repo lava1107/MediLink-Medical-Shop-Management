@@ -1,10 +1,15 @@
 import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Menu, Search, Building, Bell, ChevronDown, ChevronRight, Settings } from "lucide-react";
+import {
+  Menu, Search, Building, Bell, ChevronDown, ChevronRight, Settings,
+  Clock, Languages, KeyRound, ShieldCheck, Trash2, ArrowUpRight,
+} from "lucide-react";
 import { T } from "../../utils/theme.js";
 import { useAuth } from "../../hooks/useAuth.js";
 import { useApp } from "../../hooks/useApp.js";
 import { BRANCHES } from "../../data/mockData.js";
+import { useTranslation } from "../../context/LanguageContext.jsx";
+import { useRecent } from "../../context/RecentContext.jsx";
 
 const PAGE_TITLES = {
   dashboard: "Dashboard",
@@ -24,18 +29,24 @@ const PAGE_TITLES = {
   reports: "Reports",
   notifications: "Notifications",
   settings: "Settings",
+  "api-access": "API Access",
 };
 
 export default function Navbar({ toggleSidebar }) {
   const { user, currentBranch, setCurrentBranch } = useAuth();
   const { db, notifications, markAllRead } = useApp();
+  const { t, lang, setLang, languages } = useTranslation();
+  const { recentItems, clearRecent } = useRecent();
   const navigate = useNavigate();
   const location = useLocation();
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showRecent, setShowRecent] = useState(false);
+  const [showLangMenu, setShowLangMenu] = useState(false);
 
   const segment = location.pathname.split("/").filter(Boolean)[0] || "dashboard";
-  const pageTitle = PAGE_TITLES[segment] || "MediLink";
+  const rawTitle = PAGE_TITLES[segment] || "MediLink";
+  const pageTitle = t(segment, rawTitle);
   const unread = notifications.filter((n) => !n.read).length;
 
   return (
@@ -64,7 +75,8 @@ export default function Navbar({ toggleSidebar }) {
         {user.role === "Admin" && (
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold" style={{ background: T.blueTint, color: T.blue }}>
             <Building size={13} />
-            <select value={currentBranch} onChange={(e) => setCurrentBranch(e.target.value)} className="bg-transparent outline-none font-semibold" style={{ color: T.blue }}>
+            <select value={currentBranch} onChange={(e) => setCurrentBranch(e.target.value)} className="bg-transparent outline-none font-semibold cursor-pointer" style={{ color: T.blue }}>
+              <option value="All">All Branches</option>
               {(db?.branches || BRANCHES).map((b) => (
                 <option key={b.id} value={b.name}>
                   {b.name}
@@ -79,11 +91,139 @@ export default function Navbar({ toggleSidebar }) {
           </div>
         )}
 
+        {/* Recently Accessed Dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              setShowRecent((v) => !v);
+              setShowNotif(false);
+              setShowProfile(false);
+              setShowLangMenu(false);
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+            style={{ borderColor: T.border }}
+            title="Recently Accessed Records"
+          >
+            <Clock size={14} className="text-slate-500" />
+            <span className="hidden md:inline">{t("recentItems", "Recent")}</span>
+            {recentItems.length > 0 && (
+              <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center justify-center">
+                {recentItems.length}
+              </span>
+            )}
+          </button>
+          {showRecent && (
+            <div
+              className="absolute right-0 top-11 w-80 bg-white rounded-2xl border shadow-xl z-40 overflow-hidden"
+              style={{ borderColor: T.border }}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: T.border }}>
+                <span className="font-semibold text-xs text-slate-800 flex items-center gap-1.5">
+                  <Clock size={14} className="text-blue-600" />
+                  {t("recentItems", "Recently Accessed")}
+                </span>
+                {recentItems.length > 0 && (
+                  <button
+                    onClick={clearRecent}
+                    className="text-[11px] font-medium text-slate-400 hover:text-red-600 flex items-center gap-1"
+                  >
+                    <Trash2 size={11} /> {t("clearRecent", "Clear")}
+                  </button>
+                )}
+              </div>
+              <div className="max-h-80 overflow-y-auto divide-y" style={{ borderColor: T.borderSoft }}>
+                {recentItems.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-400">
+                    {t("noRecent", "No recently accessed records yet")}
+                  </div>
+                ) : (
+                  recentItems.map((item, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        navigate(item.path);
+                        setShowRecent(false);
+                      }}
+                      className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center justify-between group transition-colors"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] uppercase font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
+                            {item.type}
+                          </span>
+                          <span className="text-xs font-semibold text-slate-800 truncate group-hover:text-blue-600">
+                            {item.title}
+                          </span>
+                        </div>
+                        {item.subtitle && (
+                          <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                            {item.subtitle}
+                          </div>
+                        )}
+                      </div>
+                      <ArrowUpRight size={13} className="text-slate-300 group-hover:text-blue-600 shrink-0" />
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Multi-lingual Language Selector */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              setShowLangMenu((v) => !v);
+              setShowNotif(false);
+              setShowProfile(false);
+              setShowRecent(false);
+            }}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+            style={{ borderColor: T.border }}
+            title="Switch Language"
+          >
+            <Languages size={14} className="text-slate-500" />
+            <span>{languages.find((l) => l.code === lang)?.short || "EN"}</span>
+            <ChevronDown size={12} className="text-slate-400" />
+          </button>
+          {showLangMenu && (
+            <div
+              className="absolute right-0 top-11 w-44 bg-white rounded-2xl border shadow-xl z-40 overflow-hidden py-1.5"
+              style={{ borderColor: T.border }}
+            >
+              <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b" style={{ borderColor: T.border }}>
+                Select Language
+              </div>
+              {languages.map((l) => (
+                <button
+                  key={l.code}
+                  onClick={() => {
+                    setLang(l.code);
+                    setShowLangMenu(false);
+                  }}
+                  className={`w-full text-left px-3.5 py-2 text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${
+                    lang === l.code ? "font-bold text-blue-600 bg-blue-50/50" : "text-slate-700"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span>{l.flag}</span>
+                    <span>{l.label}</span>
+                  </span>
+                  {lang === l.code && <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="relative">
           <button
             onClick={() => {
               setShowNotif((v) => !v);
               setShowProfile(false);
+              setShowRecent(false);
+              setShowLangMenu(false);
             }}
             className="relative w-9 h-9 rounded-xl flex items-center justify-center hover:bg-slate-100"
           >
@@ -134,6 +274,8 @@ export default function Navbar({ toggleSidebar }) {
             onClick={() => {
               setShowProfile((v) => !v);
               setShowNotif(false);
+              setShowRecent(false);
+              setShowLangMenu(false);
             }}
             className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl hover:bg-slate-100"
           >
@@ -143,7 +285,7 @@ export default function Navbar({ toggleSidebar }) {
             <ChevronDown size={14} style={{ color: T.navySoft }} />
           </button>
           {showProfile && (
-            <div className="absolute right-0 top-11 w-52 bg-white rounded-2xl border shadow-xl z-40 overflow-hidden py-1.5" style={{ borderColor: T.border }}>
+            <div className="absolute right-0 top-11 w-56 bg-white rounded-2xl border shadow-xl z-40 overflow-hidden py-1.5" style={{ borderColor: T.border }}>
               <div className="px-4 py-2.5 border-b" style={{ borderColor: T.border }}>
                 <div className="text-xs font-semibold" style={{ color: T.navy }}>
                   {user.name}
@@ -151,7 +293,26 @@ export default function Navbar({ toggleSidebar }) {
                 <div className="text-[11px]" style={{ color: "#9AA6B2" }}>
                   {user.email}
                 </div>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    JWT Session Active
+                  </span>
+                  {user.oauthProvider && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700">
+                      {user.oauthProvider}
+                    </span>
+                  )}
+                </div>
               </div>
+              <button
+                onClick={() => {
+                  navigate("/api-access");
+                  setShowProfile(false);
+                }}
+                className="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 text-slate-700"
+              >
+                <KeyRound size={13} className="text-blue-600" /> Developer API Portal
+              </button>
               <button
                 onClick={() => {
                   navigate("/settings");
