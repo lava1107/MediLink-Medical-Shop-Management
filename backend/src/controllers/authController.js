@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { query } from "../config/db.js";
@@ -140,7 +142,12 @@ async function loginOrCreateOauthUser(res, { email, name, avatar, provider = "Go
     const branchId = branches[0]?.id || "BR-01";
     const branchName = branches[0]?.name || "Kovilpatti Branch";
     const newId = `USR-G-${Date.now().toString().slice(-4)}`;
-    const username = email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+    const baseUsername = email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "") || "guser";
+    let username = baseUsername;
+    const existingUser = await query("SELECT id FROM users WHERE username = ?", [username]);
+    if (existingUser.length > 0) {
+      username = `${baseUsername}_${Date.now().toString().slice(-4)}`;
+    }
 
     await query(
       `INSERT INTO users (id, name, username, email, password_hash, phone, role_id, branch_id, status, last_login)
@@ -222,9 +229,15 @@ export async function oauthLogin(req, res, next) {
  * Returns current Google OAuth configuration status
  */
 export function getGoogleConfig(req, res) {
-  const { GOOGLE_CLIENT_ID, GOOGLE_CALLBACK_URL } = process.env;
+  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK_URL } = process.env;
+  const isConfigured = Boolean(
+    GOOGLE_CLIENT_ID &&
+    GOOGLE_CLIENT_ID.trim() &&
+    GOOGLE_CLIENT_SECRET &&
+    GOOGLE_CLIENT_SECRET.trim()
+  );
   return success(res, {
-    configured: Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_ID.trim()),
+    configured: isConfigured,
     clientId: GOOGLE_CLIENT_ID || null,
     callbackUrl: GOOGLE_CALLBACK_URL || "http://localhost:5173/auth/google/callback",
   });
@@ -232,17 +245,56 @@ export function getGoogleConfig(req, res) {
 
 /**
  * POST /api/auth/google/config
- * Updates runtime Google OAuth configuration in backend
+ * Updates runtime Google OAuth configuration in backend and persists to .env
  */
 export function setGoogleConfig(req, res) {
   const { clientId, clientSecret, callbackUrl } = req.body || {};
   if (clientId) process.env.GOOGLE_CLIENT_ID = String(clientId).trim();
   if (clientSecret) process.env.GOOGLE_CLIENT_SECRET = String(clientSecret).trim();
   if (callbackUrl) process.env.GOOGLE_CALLBACK_URL = String(callbackUrl).trim();
+
+  try {
+    const envPath = path.join(process.cwd(), ".env");
+    if (fs.existsSync(envPath)) {
+      let envContent = fs.readFileSync(envPath, "utf-8");
+      if (clientId) {
+        if (/^GOOGLE_CLIENT_ID=/m.test(envContent)) {
+          envContent = envContent.replace(/^GOOGLE_CLIENT_ID=.*$/m, `GOOGLE_CLIENT_ID=${String(clientId).trim()}`);
+        } else {
+          envContent += `\nGOOGLE_CLIENT_ID=${String(clientId).trim()}`;
+        }
+      }
+      if (clientSecret) {
+        if (/^GOOGLE_CLIENT_SECRET=/m.test(envContent)) {
+          envContent = envContent.replace(/^GOOGLE_CLIENT_SECRET=.*$/m, `GOOGLE_CLIENT_SECRET=${String(clientSecret).trim()}`);
+        } else {
+          envContent += `\nGOOGLE_CLIENT_SECRET=${String(clientSecret).trim()}`;
+        }
+      }
+      if (callbackUrl) {
+        if (/^GOOGLE_CALLBACK_URL=/m.test(envContent)) {
+          envContent = envContent.replace(/^GOOGLE_CALLBACK_URL=.*$/m, `GOOGLE_CALLBACK_URL=${String(callbackUrl).trim()}`);
+        } else {
+          envContent += `\nGOOGLE_CALLBACK_URL=${String(callbackUrl).trim()}`;
+        }
+      }
+      fs.writeFileSync(envPath, envContent, "utf-8");
+    }
+  } catch (fsErr) {
+    console.warn("Could not write to .env file:", fsErr.message);
+  }
+
+  const isConfigured = Boolean(
+    process.env.GOOGLE_CLIENT_ID &&
+    process.env.GOOGLE_CLIENT_ID.trim() &&
+    process.env.GOOGLE_CLIENT_SECRET &&
+    process.env.GOOGLE_CLIENT_SECRET.trim()
+  );
+
   return success(
     res,
     {
-      configured: Boolean(process.env.GOOGLE_CLIENT_ID),
+      configured: isConfigured,
       clientId: process.env.GOOGLE_CLIENT_ID,
       callbackUrl: process.env.GOOGLE_CALLBACK_URL || "http://localhost:5173/auth/google/callback",
     },

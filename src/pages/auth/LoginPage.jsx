@@ -85,21 +85,12 @@ export default function LoginPage() {
   // Backend connection status
   const [backendStatus, setBackendStatus] = useState({ checked: false, connected: false });
 
-  // Real Google Sign-In state
-  const [googleAccountModal, setGoogleAccountModal] = useState(false);
-  const [googleEmail, setGoogleEmail] = useState("");
-  const [googlePassword, setGooglePassword] = useState("");
-  const [googleName, setGoogleName] = useState("");
-  const [googleRole, setGoogleRole] = useState("Admin");
-  const [googleSigningIn, setGoogleSigningIn] = useState(false);
-  const [googleAccountView, setGoogleAccountView] = useState("choose");
-  const [showGoogleConfigAdvanced, setShowGoogleConfigAdvanced] = useState(false);
-
   // Real Google OAuth Setup Modal state
   const [googleSetupModal, setGoogleSetupModal] = useState(false);
   const [googleClientIdInput, setGoogleClientIdInput] = useState(
     () => localStorage.getItem("medilink_google_client_id") || import.meta.env.VITE_GOOGLE_CLIENT_ID || ""
   );
+  const [googleClientSecretInput, setGoogleClientSecretInput] = useState("");
   const [savingGoogleConfig, setSavingGoogleConfig] = useState(false);
 
   // GitHub / Developer OAuth Modal state
@@ -150,178 +141,74 @@ export default function LoginPage() {
     await doLogin(username, password, found);
   }
 
-  async function redirectToGoogleOAuth(clientId) {
-    const data = await api.get(`/auth/google/url?clientId=${encodeURIComponent(clientId)}`);
-    if (data && data.url) {
-      window.location.href = data.url;
-    } else {
-      throw new Error("Unable to obtain Google OAuth URL.");
-    }
-  }
-
   async function handleGoogleOAuthClick() {
     setLoading(true);
     setError("");
     try {
-      let activeClientId =
-        localStorage.getItem("medilink_google_client_id") ||
-        import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-        "";
-
-      try {
-        const cfg = await api.get("/auth/google/config");
-        if (cfg && cfg.clientId) activeClientId = cfg.clientId;
-      } catch (e) {}
-
-      // If a real Google Cloud Client ID is configured, run official Google GIS or redirect
-      if (activeClientId && activeClientId.includes(".apps.googleusercontent.com")) {
-        if (window.google?.accounts?.id) {
-          try {
-            window.google.accounts.id.initialize({
-              client_id: activeClientId,
-              callback: async (response) => {
-                if (response?.credential) {
-                  setLoading(true);
-                  try {
-                    const res = await api.post("/auth/google/verify-token", {
-                      credential: response.credential,
-                    });
-                    if (res && res.user && res.token) {
-                      localStorage.setItem("medilink.token", res.token);
-                      localStorage.setItem("medilink.session", JSON.stringify(res.user));
-                      await login(res.user);
-                      navigate(redirectTo, { replace: true });
-                    }
-                  } catch (vErr) {
-                    setError("Real Google authentication failed: " + vErr.message);
-                  } finally {
-                    setLoading(false);
-                  }
-                }
-              },
-            });
-
-            window.google.accounts.id.prompt(async (notification) => {
-              if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-                await redirectToGoogleOAuth(activeClientId);
-              }
-            });
-            setLoading(false);
-            return;
-          } catch (gisErr) {
-            console.warn("[Google GIS] Falling back to OAuth redirect:", gisErr);
-          }
+      // 1. Check if backend has Google OAuth configured
+      const cfg = await api.get("/auth/google/config");
+      if (cfg && cfg.configured && cfg.clientId) {
+        // Backend has valid credentials -> fetch real Google OAuth 2.0 authorization URL
+        const authData = await api.get("/auth/google/url");
+        if (authData && authData.url) {
+          // Immediately redirect to real Google consent page
+          window.location.href = authData.url;
+          return;
         }
-
-        await redirectToGoogleOAuth(activeClientId);
-        return;
       }
 
-      // If no Google Cloud Client ID is preset, open the Authentic Real Google Sign-In modal directly!
-      setGoogleAccountView("choose");
-      setGoogleAccountModal(true);
+      // If Google OAuth credentials are not configured in backend:
+      // DO NOT fall back to Demo Login. Prompt to configure Google OAuth credentials.
+      if (cfg?.clientId) {
+        setGoogleClientIdInput(cfg.clientId);
+      }
+      setGoogleSetupModal(true);
     } catch (err) {
-      setGoogleAccountView("choose");
-      setGoogleAccountModal(true);
+      console.warn("Could not check Google OAuth configuration:", err);
+      // Keep real OAuth implementation and prompt for credentials
+      setGoogleSetupModal(true);
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handleGoogleAccountSignIn(e) {
-    if (e) e.preventDefault();
-    if (!googleEmail || !googleEmail.includes("@")) {
-      setError("Please enter a valid Google Account email (e.g. name@gmail.com).");
-      return;
-    }
-    setGoogleSigningIn(true);
-    setError("");
-    try {
-      const cleanEmail = googleEmail.trim().toLowerCase();
-      const derivedName =
-        googleName.trim() ||
-        cleanEmail
-          .split("@")[0]
-          .replace(/[^a-zA-Z0-9]/g, " ")
-          .replace(/\b\w/g, (l) => l.toUpperCase());
-
-      const result = await api.post("/auth/oauth", {
-        provider: "Google",
-        email: cleanEmail,
-        name: derivedName,
-        role: googleRole,
-        avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(derivedName)}`,
-      });
-
-      if (result && result.user && result.token) {
-        localStorage.setItem("medilink.token", result.token);
-        localStorage.setItem("medilink.session", JSON.stringify(result.user));
-        await login(result.user);
-        setGoogleAccountModal(false);
-        navigate(redirectTo, { replace: true });
-      } else {
-        throw new Error("Failed to authenticate Google account session.");
-      }
-    } catch (err) {
-      setError(err.message || "Failed to authenticate real Google account.");
-    } finally {
-      setGoogleSigningIn(false);
-    }
-  }
-
-  async function handleAccountPick(email, name, role = "Pharmacist") {
-    setGoogleSigningIn(true);
-    setError("");
-    try {
-      const cleanEmail = email.trim().toLowerCase();
-      const derivedName = name || cleanEmail.split("@")[0].replace(/\b\w/g, (l) => l.toUpperCase());
-
-      const result = await api.post("/auth/oauth", {
-        provider: "Google",
-        email: cleanEmail,
-        name: derivedName,
-        role: role,
-        avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(derivedName)}`,
-      });
-
-      if (result && result.user && result.token) {
-        localStorage.setItem("medilink.token", result.token);
-        localStorage.setItem("medilink.session", JSON.stringify(result.user));
-        await login(result.user);
-        setGoogleAccountModal(false);
-        navigate(redirectTo, { replace: true });
-      } else {
-        throw new Error("Failed to authenticate Google account session.");
-      }
-    } catch (err) {
-      setError(err.message || "Failed to authenticate real Google account.");
-    } finally {
-      setGoogleSigningIn(false);
     }
   }
 
   async function handleSaveGoogleConfig(e) {
     if (e) e.preventDefault();
     const cleanId = googleClientIdInput.trim();
+    const cleanSecret = googleClientSecretInput.trim();
+
     if (!cleanId) {
       setError("Please enter your Google Cloud OAuth 2.0 Client ID.");
       return;
     }
+    if (!cleanSecret) {
+      setError("Please enter your Google Cloud OAuth 2.0 Client Secret.");
+      return;
+    }
+
     setSavingGoogleConfig(true);
+    setError("");
     try {
-      localStorage.setItem("medilink_google_client_id", cleanId);
-      await api.post("/auth/google/config", { clientId: cleanId });
+      // Save credentials securely to backend (.env & process.env)
+      await api.post("/auth/google/config", {
+        clientId: cleanId,
+        clientSecret: cleanSecret,
+        callbackUrl: "http://localhost:5173/auth/google/callback",
+      });
+
+      // Clear the secret from UI state for security
+      setGoogleClientSecretInput("");
       setGoogleSetupModal(false);
-      // Immediately initiate real Google authentication with the provided Client ID!
-      await redirectToGoogleOAuth(cleanId);
-    } catch (err) {
-      localStorage.setItem("medilink_google_client_id", cleanId);
-      setGoogleSetupModal(false);
-      try {
-        await redirectToGoogleOAuth(cleanId);
-      } catch (rErr) {
-        setError("Google redirection failed: " + rErr.message);
+
+      // Immediately initiate real Google OAuth redirect
+      const authData = await api.get("/auth/google/url");
+      if (authData && authData.url) {
+        window.location.href = authData.url;
+      } else {
+        throw new Error("Unable to obtain Google sign-in URL.");
       }
+    } catch (err) {
+      setError("Failed to save Google OAuth configuration: " + (err.message || "Unknown error"));
     } finally {
       setSavingGoogleConfig(false);
     }
@@ -615,222 +502,11 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Google Accounts Window Popup (Exact replica of Google Account Chooser from screenshot) */}
-      {googleAccountModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-[430px] bg-white rounded-2xl shadow-2xl border border-slate-300 overflow-hidden flex flex-col font-sans">
-            
-            {/* Chrome Browser Window Titlebar */}
-            <div className="bg-[#dee1e6] px-3 py-1.5 flex items-center justify-between border-b border-slate-300 select-none">
-              <div className="flex items-center gap-2">
-                <div className="bg-white px-2.5 py-1 rounded-t-lg border-t border-x border-slate-300 flex items-center gap-1.5 shadow-2xs">
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                  </svg>
-                  <span className="text-[11px] font-medium text-slate-700 truncate max-w-[200px]">Sign in – Google accounts</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-slate-600">
-                <span className="cursor-pointer hover:bg-slate-300 px-1.5 py-0.5 rounded text-xs leading-none">―</span>
-                <span className="cursor-pointer hover:bg-slate-300 px-1.5 py-0.5 rounded text-xs leading-none">◻</span>
-                <button
-                  type="button"
-                  onClick={() => setGoogleAccountModal(false)}
-                  className="hover:bg-red-500 hover:text-white px-2 py-0.5 rounded text-xs leading-none transition-colors"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            {/* Chrome URL Address Bar */}
-            <div className="bg-[#f1f3f4] px-3 py-1.5 border-b border-slate-200 flex items-center gap-2">
-              <div className="flex-1 bg-white rounded-full px-3 py-1 flex items-center gap-1.5 text-[11px] text-slate-600 font-mono border border-slate-200">
-                <span className="text-slate-400">🔒</span>
-                <span className="text-emerald-700 font-sans font-semibold text-[10px]">accounts.google.com</span>
-                <span className="text-slate-400 truncate">/v3/signin/accountchooser?access_type=online&client_id=53235...</span>
-              </div>
-            </div>
-
-            {/* Google Account Modal Content */}
-            <div className="p-7 sm:p-8 bg-white flex-1 flex flex-col justify-between">
-              <div>
-                {/* Header: Google Logo + Sign in with Google */}
-                <div className="flex items-center gap-2 mb-6">
-                  <svg className="w-5 h-5" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                  </svg>
-                  <span className="text-xs font-semibold text-slate-700">Sign in with Google</span>
-                </div>
-
-                {/* MediLink Logo Icon */}
-                <div className="mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-pink-500 p-0.5 shadow-sm inline-flex items-center justify-center">
-                    <div className="w-full h-full bg-blue-600 rounded-[10px] flex items-center justify-center text-white">
-                      <Pill size={20} className="text-white" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Title & Subtitle */}
-                <h2 className="text-2xl font-normal text-slate-900 tracking-tight">Choose an account</h2>
-                <p className="text-sm text-slate-600 mt-1 mb-6">
-                  to continue to <span className="font-semibold text-blue-600">MediLink</span>
-                </p>
-
-                {error && (
-                  <div className="mb-4 p-2.5 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700">
-                    {error}
-                  </div>
-                )}
-
-                {googleAccountView === "choose" ? (
-                  <div className="border-t border-slate-200 divide-y divide-slate-200">
-                    {/* Account 1: Lavanya M (lavayam07@gmail.com) */}
-                    <button
-                      type="button"
-                      disabled={googleSigningIn}
-                      onClick={() => handleAccountPick("lavayam07@gmail.com", "Lavanya M", "Pharmacist")}
-                      className="w-full py-3.5 px-1 flex items-center gap-3 text-left hover:bg-slate-50 transition-colors group cursor-pointer"
-                    >
-                      <div className="w-9 h-9 rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs">
-                        L
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-slate-800 group-hover:text-slate-900">Lavanya M</div>
-                        <div className="text-xs text-slate-500 truncate">lavayam07@gmail.com</div>
-                      </div>
-                      {googleSigningIn && <Loader2 size={15} className="animate-spin text-blue-600" />}
-                    </button>
-
-                    {/* Account 2: Lavanya M (lavanyavani1107@gmail.com) */}
-                    <button
-                      type="button"
-                      disabled={googleSigningIn}
-                      onClick={() => handleAccountPick("lavanyavani1107@gmail.com", "Lavanya M", "Pharmacist")}
-                      className="w-full py-3.5 px-1 flex items-center gap-3 text-left hover:bg-slate-50 transition-colors group cursor-pointer"
-                    >
-                      <div className="w-9 h-9 rounded-full bg-slate-700 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-2xs">
-                        L
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-slate-800 group-hover:text-slate-900">Lavanya M</div>
-                        <div className="text-xs text-slate-500 truncate">lavanyavani1107@gmail.com</div>
-                      </div>
-                      {googleSigningIn && <Loader2 size={15} className="animate-spin text-blue-600" />}
-                    </button>
-
-                    {/* Option 3: Use another account */}
-                    <button
-                      type="button"
-                      disabled={googleSigningIn}
-                      onClick={() => setGoogleAccountView("custom")}
-                      className="w-full py-3.5 px-1 flex items-center gap-3 text-left hover:bg-slate-50 transition-colors group cursor-pointer"
-                    >
-                      <div className="w-9 h-9 rounded-full border border-slate-300 text-slate-600 flex items-center justify-center shrink-0">
-                        <UserRound size={17} />
-                      </div>
-                      <div className="text-sm font-medium text-slate-800 group-hover:text-blue-600">
-                        Use another account
-                      </div>
-                    </button>
-                  </div>
-                ) : (
-                  /* Custom Google Account Sign-In View */
-                  <form onSubmit={handleGoogleAccountSignIn} className="space-y-4 pt-2">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Email or phone
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        autoFocus
-                        placeholder="Enter your real Google email"
-                        value={googleEmail}
-                        onChange={(e) => setGoogleEmail(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Enter your password
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        placeholder="Google password"
-                        value={googlePassword}
-                        onChange={(e) => setGooglePassword(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none font-mono"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Full Name</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Lavanya M"
-                          value={googleName}
-                          onChange={(e) => setGoogleName(e.target.value)}
-                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Role</label>
-                        <select
-                          value={googleRole}
-                          onChange={(e) => setGoogleRole(e.target.value)}
-                          className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs"
-                        >
-                          <option value="Admin">Admin</option>
-                          <option value="Pharmacist">Pharmacist</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-3">
-                      <button
-                        type="button"
-                        onClick={() => setGoogleAccountView("choose")}
-                        className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer"
-                      >
-                        ← Back to account list
-                      </button>
-                      <Btn
-                        type="submit"
-                        disabled={googleSigningIn || !googleEmail.trim() || !googlePassword.trim()}
-                        className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2"
-                      >
-                        {googleSigningIn ? "Signing in..." : "Next"}
-                      </Btn>
-                    </div>
-                  </form>
-                )}
-              </div>
-
-              {/* Footer Notice */}
-              <div className="mt-8 pt-4 border-t border-slate-100 text-[11px] text-slate-500 leading-relaxed">
-                Before using this app, you can review MediLink's{" "}
-                <span className="text-blue-600 hover:underline cursor-pointer">Privacy Policy</span> and{" "}
-                <span className="text-blue-600 hover:underline cursor-pointer">Terms of Service</span>.
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Real Google Account OAuth Setup & Connection Modal */}
+      {/* Real Google Account OAuth Setup & Configuration Modal */}
       <Modal
         open={googleSetupModal}
         onClose={() => setGoogleSetupModal(false)}
-        title="Real Google Account Authentication"
+        title="Google OAuth 2.0 Real Authentication Setup"
         maxWidth="max-w-lg"
       >
         <form onSubmit={handleSaveGoogleConfig} className="space-y-4">
@@ -857,15 +533,16 @@ export default function LoginPage() {
             </div>
             <div className="text-xs text-blue-900 leading-relaxed">
               <strong className="font-bold block text-sm mb-0.5 text-blue-950">
-                Genuine Google OAuth 2.0 Sign-In
+                Real Google OAuth 2.0 Authentication
               </strong>
-              Sign in with your real Google account (@gmail.com or Google Workspace). Authenticates cryptographically against Google's verified identity servers.
+              To sign in with your real Google account on <span className="font-semibold">accounts.google.com</span>, enter your Google Cloud OAuth 2.0 Web Application credentials.
+              Credentials are saved securely in the backend <code className="bg-blue-100 text-blue-800 px-1 py-0.5 rounded font-mono text-[10px]">.env</code> file.
             </div>
           </div>
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Google Cloud OAuth 2.0 Client ID
+              Google Cloud OAuth 2.0 Client ID (GOOGLE_CLIENT_ID)
             </label>
             <input
               type="text"
@@ -876,8 +553,23 @@ export default function LoginPage() {
               className="w-full px-3.5 py-2.5 rounded-xl border text-xs font-mono outline-none focus:border-blue-500 bg-white"
               style={{ borderColor: T.border }}
             />
-            <p className="text-[11px] text-slate-500 mt-1">
-              Connects to your Google Cloud project so Google prompts for your real Google account credentials.
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              Google Cloud OAuth 2.0 Client Secret (GOOGLE_CLIENT_SECRET)
+            </label>
+            <input
+              type="password"
+              required
+              placeholder="e.g. GOCSPX-xxxxxxxxxxxxxxxxxxxx"
+              value={googleClientSecretInput}
+              onChange={(e) => setGoogleClientSecretInput(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border text-xs font-mono outline-none focus:border-blue-500 bg-white"
+              style={{ borderColor: T.border }}
+            />
+            <p className="text-[11px] text-slate-400 mt-1">
+              Kept strictly confidential in backend environment variables. Never exposed in browser bundles.
             </p>
           </div>
 
@@ -897,16 +589,16 @@ export default function LoginPage() {
                 Google Cloud Console → Credentials
               </a>
             </div>
-            <div>2. Click <strong>Create Credentials → OAuth client ID</strong> (Application type: Web application)</div>
+            <div>2. Click <strong>Create Credentials → OAuth client ID</strong> (Application type: <strong>Web application</strong>)</div>
             <div>
               3. Authorized redirect URI:
-              <code className="block bg-white px-2.5 py-1 rounded-lg border mt-1 text-blue-700 font-mono text-[10px] select-all">
+              <code className="block bg-white px-2.5 py-1 rounded-lg border mt-1 text-blue-700 font-mono text-[10px] select-all font-semibold">
                 http://localhost:5173/auth/google/callback
               </code>
             </div>
             <div>
               4. Authorized JavaScript origin:
-              <code className="block bg-white px-2.5 py-1 rounded-lg border mt-1 text-blue-700 font-mono text-[10px] select-all">
+              <code className="block bg-white px-2.5 py-1 rounded-lg border mt-1 text-blue-700 font-mono text-[10px] select-all font-semibold">
                 http://localhost:5173
               </code>
             </div>
@@ -923,11 +615,11 @@ export default function LoginPage() {
             </button>
             <Btn
               type="submit"
-              disabled={savingGoogleConfig || !googleClientIdInput.trim()}
+              disabled={savingGoogleConfig || !googleClientIdInput.trim() || !googleClientSecretInput.trim()}
               className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 flex items-center gap-2"
             >
               <UserCheck size={14} />
-              <span>{savingGoogleConfig ? "Connecting..." : "Continue with Real Google"}</span>
+              <span>{savingGoogleConfig ? "Saving & Connecting..." : "Save & Continue with Real Google"}</span>
             </Btn>
           </div>
         </form>
