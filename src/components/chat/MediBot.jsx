@@ -8,6 +8,7 @@ import { T } from "../../utils/theme.js";
 import { useApp } from "../../hooks/useApp.js";
 import { useTranslation } from "../../context/LanguageContext.jsx";
 import { analyzePrescriptionSafety } from "../../services/drugSafetyEngine.js";
+import { api } from "../../services/api.js";
 
 const DEFAULT_SUGGESTIONS = [
   "Check Dolo 650 stock across branches",
@@ -42,7 +43,7 @@ export default function MediBot() {
     }
   }, [messages, isOpen]);
 
-  const handleSend = (textToSend) => {
+  const handleSend = async (textToSend) => {
     const query = (textToSend || input).trim();
     if (!query) return;
 
@@ -57,7 +58,42 @@ export default function MediBot() {
     setInput("");
     setIsTyping(true);
 
-    setTimeout(() => {
+    try {
+      const historyPayload = messages.slice(-4).map((m) => ({
+        sender: m.sender,
+        text: m.text,
+      }));
+
+      const botResult = await api.post("/chat", {
+        message: query,
+        conversationHistory: historyPayload,
+      });
+
+      let action = null;
+      if (botResult?.action) {
+        if (typeof botResult.action.handler === "function") {
+          action = botResult.action;
+        } else if (botResult.action.path) {
+          action = {
+            label: botResult.action.label,
+            handler: () => navigate(botResult.action.path),
+          };
+        }
+      }
+
+      setIsTyping(false);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `b-${Date.now()}`,
+          sender: "bot",
+          text: botResult?.text || "No response received from MediBot AI.",
+          action: action || undefined,
+          clinicalBadge: botResult?.clinicalBadge || "Live DB Verified",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        },
+      ]);
+    } catch (err) {
       const botResponse = generateBotResponse(query, db, navigate);
       setIsTyping(false);
       setMessages((prev) => [
@@ -71,7 +107,7 @@ export default function MediBot() {
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         },
       ]);
-    }, 600);
+    }
   };
 
   return (
@@ -277,7 +313,7 @@ function generateBotResponse(rawQuery, db, navigate) {
     return {
       clinicalBadge: "Resume Showcase",
       text: `MediLink's standout defense features beyond standard CRUD are:\n
-1. Clinical Drug-Drug Interaction (DDI) Engine: Live safety analysis during POS dispensing that alerts pharmacists to adverse combinations (e.g. Paracetamol toxicity, NSAID renal load, PPI antibiotic chelation).\n
+1. Automated FIFO Queue & Real SMS Notifications: Dispatches real-time SMS alerts strictly ordered by reservation booking timestamp when new medicine stock arrives.\n
 2. Inter-Branch Geo-Stock Exchange: Automated Haversine GPS distance calculation between Kovilpatti, Tirunelveli, and Madurai branches plus 5 registered partner pharmacies for instant emergency reservation.\n
 3. Developer REST API: Secured with Bearer JWT & X-API-Key with live interactive sandbox explorer.`,
       action: { label: "Explore API Portal", handler: () => navigate("/api-access") },

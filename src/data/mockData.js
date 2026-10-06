@@ -98,14 +98,14 @@ MEDICINES.forEach((med, mi) => {
 });
 
 export const CUSTOMERS = [
-  { id: "CUS-01", name: "Ramya Krishnan", phone: "+91 98940 12233", email: "ramya.k@gmail.com", address: "14 Kamarajar Street, Kovilpatti", rxRef: "-", created: "2024-05-02" },
-  { id: "CUS-02", name: "Suresh Babu", phone: "+91 90031 44567", email: "suresh.babu@gmail.com", address: "7 North Car Street, Kovilpatti", rxRef: "RX-2291", created: "2024-06-11" },
-  { id: "CUS-03", name: "Lakshmi Narayanan", phone: "+91 97159 88213", email: "lakshmi.n@yahoo.com", address: "22 Palayamkottai Road, Tirunelveli", rxRef: "-", created: "2024-06-20" },
-  { id: "CUS-04", name: "Muthu Vel", phone: "+91 96297 33810", email: "muthuvel87@gmail.com", address: "3 Anna Nagar, Madurai", rxRef: "RX-3312", created: "2024-07-05" },
-  { id: "CUS-05", name: "Deepa Rajendran", phone: "+91 89258 76290", email: "deepa.r@outlook.com", address: "18 Bypass Road, Madurai", rxRef: "-", created: "2024-08-14" },
-  { id: "CUS-06", name: "Karthikeyan S", phone: "+91 91502 66781", email: "karthik.s@gmail.com", address: "9 Trivandrum Road, Tirunelveli", rxRef: "RX-4410", created: "2024-09-02" },
-  { id: "CUS-07", name: "Vasanthi Murugan", phone: "+91 98430 11290", email: "vasanthi.m@gmail.com", address: "31 VOC Street, Kovilpatti", rxRef: "-", created: "2024-09-19" },
-  { id: "CUS-08", name: "Arun Prakash", phone: "+91 90474 55321", email: "arun.prakash@gmail.com", address: "5 Simmakkal, Madurai", rxRef: "RX-5108", created: "2024-10-08" },
+  { id: "CUS-01", name: "Ramya Krishnan", phone: "+91 98940 12233", email: "ramya.k@gmail.com", address: "14 Kamarajar Street, Kovilpatti", city: "Kovilpatti", branch: "Kovilpatti Branch", rxRef: "-", created: "2024-05-02" },
+  { id: "CUS-02", name: "Suresh Babu", phone: "+91 90031 44567", email: "suresh.babu@gmail.com", address: "7 North Car Street, Kovilpatti", city: "Kovilpatti", branch: "Kovilpatti Branch", rxRef: "RX-2291", created: "2024-06-11" },
+  { id: "CUS-03", name: "Lakshmi Narayanan", phone: "+91 97159 88213", email: "lakshmi.n@yahoo.com", address: "22 Palayamkottai Road, Tirunelveli", city: "Tirunelveli", branch: "Tirunelveli Branch", rxRef: "-", created: "2024-06-20" },
+  { id: "CUS-04", name: "Muthu Vel", phone: "+91 96297 33810", email: "muthuvel87@gmail.com", address: "3 Anna Nagar, Madurai", city: "Madurai", branch: "Madurai Branch", rxRef: "RX-3312", created: "2024-07-05" },
+  { id: "CUS-05", name: "Deepa Rajendran", phone: "+91 89258 76290", email: "deepa.r@outlook.com", address: "18 Bypass Road, Madurai", city: "Madurai", branch: "Madurai Branch", rxRef: "-", created: "2024-08-14" },
+  { id: "CUS-06", name: "Karthikeyan S", phone: "+91 91502 66781", email: "karthik.s@gmail.com", address: "9 Trivandrum Road, Tirunelveli", city: "Tirunelveli", branch: "Tirunelveli Branch", rxRef: "RX-4410", created: "2024-09-02" },
+  { id: "CUS-07", name: "Vasanthi Murugan", phone: "+91 98430 11290", email: "vasanthi.m@gmail.com", address: "31 VOC Street, Kovilpatti", city: "Kovilpatti", branch: "Kovilpatti Branch", rxRef: "-", created: "2024-09-19" },
+  { id: "CUS-08", name: "Arun Prakash", phone: "+91 90474 55321", email: "arun.prakash@gmail.com", address: "5 Simmakkal, Madurai", city: "Madurai", branch: "Madurai Branch", rxRef: "RX-5108", created: "2024-10-08" },
 ];
 
 export const USERS = [
@@ -122,40 +122,68 @@ const PAY_METHODS = ["Cash", "UPI", "Card"];
 function genBill(i) {
   return `MDL/26-27/${1000 + i}`;
 }
-export const SALES = Array.from({ length: 12 }).map((_, i) => {
-  const br = BRANCHES[i % 3];
-  const cus = CUSTOMERS[i % CUSTOMERS.length];
-  const usr = USERS.filter((u) => u.role === "Pharmacist" && u.branch === br.name)[0] || USERS[1];
-  const amount = 120 + ((i * 57) % 900);
-  const daysAgo = i < 4 ? 0 : i < 8 ? 1 : 2;
-  return {
-    id: `SAL-${pad(i + 1)}`,
-    bill: genBill(i + 1),
-    customer: cus.name,
-    pharmacist: usr.name,
-    branch: br.name,
-    amount,
-    payment: PAY_METHODS[i % 3],
-    date: addDays(TODAY, -daysAgo),
-    status: "Completed",
-  };
-});
+export const SALES = [
+  // Kovilpatti Branch Transactions
+  { id: "SAL-01", bill: "MDL/26-27/1001", customer: "Ramya Krishnan", pharmacist: "M. Rajan", branch: "Kovilpatti Branch", amount: 480, payment: "Cash", date: "2026-08-20", status: "Completed" },
+  { id: "SAL-02", bill: "MDL/26-27/1002", customer: "Suresh Babu", pharmacist: "M. Rajan", branch: "Kovilpatti Branch", amount: 850, payment: "UPI", date: "2026-08-20", status: "Completed" },
+  { id: "SAL-03", bill: "MDL/26-27/1003", customer: "Vasanthi Murugan", pharmacist: "M. Rajan", branch: "Kovilpatti Branch", amount: 1240, payment: "Card", date: "2026-08-20", status: "Completed" },
+  { id: "SAL-04", bill: "MDL/26-27/1004", customer: "Ramya Krishnan", pharmacist: "M. Rajan", branch: "Kovilpatti Branch", amount: 320, payment: "Cash", date: "2026-08-19", status: "Completed" },
+  { id: "SAL-05", bill: "MDL/26-27/1005", customer: "Suresh Babu", pharmacist: "M. Rajan", branch: "Kovilpatti Branch", amount: 670, payment: "UPI", date: "2026-08-19", status: "Completed" },
+  { id: "SAL-06", bill: "MDL/26-27/1006", customer: "Vasanthi Murugan", pharmacist: "M. Rajan", branch: "Kovilpatti Branch", amount: 1520, payment: "Cash", date: "2026-08-18", status: "Completed" },
+  { id: "SAL-07", bill: "MDL/26-27/1007", customer: "Suresh Babu", pharmacist: "M. Rajan", branch: "Kovilpatti Branch", amount: 430, payment: "UPI", date: "2026-08-18", status: "Completed" },
+  { id: "SAL-08", bill: "MDL/26-27/1008", customer: "Ramya Krishnan", pharmacist: "M. Rajan", branch: "Kovilpatti Branch", amount: 910, payment: "Card", date: "2026-08-17", status: "Completed" },
+
+  // Tirunelveli Branch Transactions
+  { id: "SAL-09", bill: "MDL/26-27/1009", customer: "Lakshmi Narayanan", pharmacist: "K. Meenakshi", branch: "Tirunelveli Branch", amount: 290, payment: "Cash", date: "2026-08-20", status: "Completed" },
+  { id: "SAL-10", bill: "MDL/26-27/1010", customer: "Karthikeyan S", pharmacist: "K. Meenakshi", branch: "Tirunelveli Branch", amount: 540, payment: "UPI", date: "2026-08-20", status: "Completed" },
+  { id: "SAL-11", bill: "MDL/26-27/1011", customer: "Lakshmi Narayanan", pharmacist: "N. Bhuvaneshwari", branch: "Tirunelveli Branch", amount: 780, payment: "Card", date: "2026-08-20", status: "Completed" },
+  { id: "SAL-12", bill: "MDL/26-27/1012", customer: "Karthikeyan S", pharmacist: "K. Meenakshi", branch: "Tirunelveli Branch", amount: 360, payment: "Cash", date: "2026-08-19", status: "Completed" },
+  { id: "SAL-13", bill: "MDL/26-27/1013", customer: "Lakshmi Narayanan", pharmacist: "N. Bhuvaneshwari", branch: "Tirunelveli Branch", amount: 920, payment: "UPI", date: "2026-08-19", status: "Completed" },
+  { id: "SAL-14", bill: "MDL/26-27/1014", customer: "Karthikeyan S", pharmacist: "K. Meenakshi", branch: "Tirunelveli Branch", amount: 460, payment: "Cash", date: "2026-08-18", status: "Completed" },
+  { id: "SAL-15", bill: "MDL/26-27/1015", customer: "Lakshmi Narayanan", pharmacist: "K. Meenakshi", branch: "Tirunelveli Branch", amount: 630, payment: "UPI", date: "2026-08-18", status: "Completed" },
+  { id: "SAL-16", bill: "MDL/26-27/1016", customer: "Karthikeyan S", pharmacist: "N. Bhuvaneshwari", branch: "Tirunelveli Branch", amount: 810, payment: "Card", date: "2026-08-17", status: "Completed" },
+
+  // Madurai Branch Transactions
+  { id: "SAL-17", bill: "MDL/26-27/1017", customer: "Muthu Vel", pharmacist: "P. Arun Kumar", branch: "Madurai Branch", amount: 650, payment: "Cash", date: "2026-08-20", status: "Completed" },
+  { id: "SAL-18", bill: "MDL/26-27/1018", customer: "Deepa Rajendran", pharmacist: "M. Divya", branch: "Madurai Branch", amount: 1120, payment: "UPI", date: "2026-08-20", status: "Completed" },
+  { id: "SAL-19", bill: "MDL/26-27/1019", customer: "Arun Prakash", pharmacist: "P. Arun Kumar", branch: "Madurai Branch", amount: 1480, payment: "Card", date: "2026-08-20", status: "Completed" },
+  { id: "SAL-20", bill: "MDL/26-27/1020", customer: "Muthu Vel", pharmacist: "M. Divya", branch: "Madurai Branch", amount: 540, payment: "Cash", date: "2026-08-19", status: "Completed" },
+  { id: "SAL-21", bill: "MDL/26-27/1021", customer: "Deepa Rajendran", pharmacist: "P. Arun Kumar", branch: "Madurai Branch", amount: 870, payment: "UPI", date: "2026-08-19", status: "Completed" },
+  { id: "SAL-22", bill: "MDL/26-27/1022", customer: "Arun Prakash", pharmacist: "M. Divya", branch: "Madurai Branch", amount: 1650, payment: "Cash", date: "2026-08-18", status: "Completed" },
+  { id: "SAL-23", bill: "MDL/26-27/1023", customer: "Muthu Vel", pharmacist: "P. Arun Kumar", branch: "Madurai Branch", amount: 780, payment: "UPI", date: "2026-08-18", status: "Completed" },
+  { id: "SAL-24", bill: "MDL/26-27/1024", customer: "Deepa Rajendran", pharmacist: "M. Divya", branch: "Madurai Branch", amount: 990, payment: "Card", date: "2026-08-17", status: "Completed" },
+];
 
 export const PURCHASES = [
+  // Kovilpatti Purchases
   { id: "PUR-01", invoice: "SPD/INV/4471", supplier: "Sun Pharma Distributors", branch: "Kovilpatti Branch", purchasedBy: "Lavanya M", date: "2026-08-15", amount: 24850, payment: "Paid", status: "Received" },
-  { id: "PUR-02", invoice: "CRS/INV/8823", supplier: "Cipla Regional Supply Co.", branch: "Madurai Branch", purchasedBy: "P. Arun Kumar", date: "2026-08-16", amount: 18200, payment: "Pending", status: "Received" },
-  { id: "PUR-03", invoice: "MPA/INV/1129", supplier: "Madurai Pharma Agencies", branch: "Madurai Branch", purchasedBy: "P. Arun Kumar", date: "2026-08-12", amount: 9640, payment: "Paid", status: "Received" },
-  { id: "PUR-04", invoice: "ZSD/INV/6602", supplier: "Zydus Southern Distribution", branch: "Tirunelveli Branch", purchasedBy: "K. Meenakshi", date: "2026-08-10", amount: 31200, payment: "Paid", status: "Received" },
   { id: "PUR-05", invoice: "TSP/INV/3391", supplier: "Tuticorin Surgical & Pharma", branch: "Kovilpatti Branch", purchasedBy: "Lavanya M", date: "2026-08-08", amount: 5480, payment: "Partially Paid", status: "Received" },
   { id: "PUR-06", invoice: "SPD/INV/4502", supplier: "Sun Pharma Distributors", branch: "Kovilpatti Branch", purchasedBy: "Lavanya M", date: "2026-08-19", amount: 16750, payment: "Pending", status: "Ordered" },
+
+  // Tirunelveli Purchases
+  { id: "PUR-04", invoice: "ZSD/INV/6602", supplier: "Zydus Southern Distribution", branch: "Tirunelveli Branch", purchasedBy: "K. Meenakshi", date: "2026-08-10", amount: 31200, payment: "Paid", status: "Received" },
+  { id: "PUR-07", invoice: "CRS/INV/8910", supplier: "Cipla Regional Supply Co.", branch: "Tirunelveli Branch", purchasedBy: "K. Meenakshi", date: "2026-08-18", amount: 14500, payment: "Paid", status: "Received" },
+  { id: "PUR-09", invoice: "TSP/INV/3412", supplier: "Tuticorin Surgical & Pharma", branch: "Tirunelveli Branch", purchasedBy: "K. Meenakshi", date: "2026-08-16", amount: 8300, payment: "Pending", status: "Ordered" },
+
+  // Madurai Purchases
+  { id: "PUR-02", invoice: "CRS/INV/8823", supplier: "Cipla Regional Supply Co.", branch: "Madurai Branch", purchasedBy: "P. Arun Kumar", date: "2026-08-16", amount: 18200, payment: "Pending", status: "Received" },
+  { id: "PUR-03", invoice: "MPA/INV/1129", supplier: "Madurai Pharma Agencies", branch: "Madurai Branch", purchasedBy: "P. Arun Kumar", date: "2026-08-12", amount: 9640, payment: "Paid", status: "Received" },
+  { id: "PUR-08", invoice: "MPA/INV/1155", supplier: "Madurai Pharma Agencies", branch: "Madurai Branch", purchasedBy: "P. Arun Kumar", date: "2026-08-19", amount: 22100, payment: "Paid", status: "Received" },
 ];
 
 export const RESERVATIONS = [
-  { id: "RSV-01", customer: "Suresh Babu", medicine: "Human Mixtard Insulin", branch: "Kovilpatti Branch", quantity: 2, resDate: "2026-08-19", expiry: "2026-08-22", status: "Pending", createdBy: "R. Rajan" },
-  { id: "RSV-02", customer: "Muthu Vel", medicine: "Moxifloxacin Eye Drops", branch: "Madurai Branch", quantity: 1, resDate: "2026-08-18", expiry: "2026-08-21", status: "Reserved", createdBy: "P. Arun Kumar" },
-  { id: "RSV-03", customer: "Karthikeyan S", medicine: "Azithromycin 500mg", branch: "Tirunelveli Branch", quantity: 3, resDate: "2026-08-17", expiry: "2026-08-20", status: "Collected", createdBy: "K. Meenakshi" },
-  { id: "RSV-04", customer: "Vasanthi Murugan", medicine: "Ascoril Cough Syrup", branch: "Kovilpatti Branch", quantity: 1, resDate: "2026-08-15", expiry: "2026-08-18", status: "Expired", createdBy: "R. Rajan" },
-  { id: "RSV-05", customer: "Arun Prakash", medicine: "Metformin 500mg", branch: "Madurai Branch", quantity: 2, resDate: "2026-08-14", expiry: "2026-08-17", status: "Cancelled", createdBy: "P. Arun Kumar" },
+  // Kovilpatti Reservations
+  { id: "RSV-01", customer: "Suresh Babu", phone: "+91 98421 22334", customerPhone: "+91 98421 22334", medicine: "Human Mixtard Insulin", branch: "Kovilpatti Branch", quantity: 2, resDate: "2026-08-18", expiry: "2026-08-22", status: "Pending", createdBy: "R. Rajan" },
+  { id: "RSV-04", customer: "Vasanthi Murugan", phone: "+91 98430 11290", customerPhone: "+91 98430 11290", medicine: "Ascoril Cough Syrup", branch: "Kovilpatti Branch", quantity: 1, resDate: "2026-08-15", expiry: "2026-08-18", status: "Expired", createdBy: "R. Rajan" },
+  { id: "RSV-07", customer: "Ramya Krishnan", phone: "+91 98400 11111", customerPhone: "+91 98400 11111", medicine: "Dolo 650", branch: "Kovilpatti Branch", quantity: 3, resDate: "2026-08-20", expiry: "2026-08-23", status: "Reserved", createdBy: "R. Rajan" },
+
+  // Tirunelveli Reservations
+  { id: "RSV-03", customer: "Karthikeyan S", phone: "+91 91502 66781", customerPhone: "+91 91502 66781", medicine: "Azithromycin 500mg", branch: "Tirunelveli Branch", quantity: 3, resDate: "2026-08-17", expiry: "2026-08-20", status: "Collected", createdBy: "K. Meenakshi" },
+  { id: "RSV-06", customer: "Lakshmi Narayanan", phone: "+91 97910 88234", customerPhone: "+91 97910 88234", medicine: "Amoxicillin 500mg", branch: "Tirunelveli Branch", quantity: 2, resDate: "2026-08-19", expiry: "2026-08-22", status: "Pending", createdBy: "K. Meenakshi" },
+
+  // Madurai Reservations
+  { id: "RSV-02", customer: "Muthu Vel", phone: "+91 96297 33810", customerPhone: "+91 96297 33810", medicine: "Moxifloxacin Eye Drops", branch: "Madurai Branch", quantity: 1, resDate: "2026-08-18", expiry: "2026-08-21", status: "Reserved", createdBy: "P. Arun Kumar" },
+  { id: "RSV-05", customer: "Arun Prakash", phone: "+91 90474 55321", customerPhone: "+91 90474 55321", medicine: "Metformin 500mg", branch: "Madurai Branch", quantity: 2, resDate: "2026-08-14", expiry: "2026-08-17", status: "Cancelled", createdBy: "P. Arun Kumar" },
 ];
 
 // Partner shops are registered third parties, NOT MediLink branches. Distance is
@@ -170,19 +198,53 @@ export const PARTNER_SHOPS = [
 ];
 
 export const PARTNER_AVAILABILITY = [
-  { shopId: "PS-01", medicineName: "Human Mixtard Insulin", quantity: 12, lastUpdated: "2026-08-19 05:40 PM" },
-  { shopId: "PS-02", medicineName: "Human Mixtard Insulin", quantity: 8, lastUpdated: "2026-08-20 09:10 AM" },
-  { shopId: "PS-03", medicineName: "Human Mixtard Insulin", quantity: 5, lastUpdated: "2026-08-20 07:50 AM" },
-  { shopId: "PS-01", medicineName: "Betadine Ointment", quantity: 14, lastUpdated: "2026-08-19 07:15 PM" },
-  { shopId: "PS-04", medicineName: "Betadine Ointment", quantity: 6, lastUpdated: "2026-08-19 07:15 PM" },
-  { shopId: "PS-02", medicineName: "Moxifloxacin Eye Drops", quantity: 9, lastUpdated: "2026-08-20 08:20 AM" },
-  { shopId: "PS-05", medicineName: "Moxifloxacin Eye Drops", quantity: 4, lastUpdated: "2026-08-20 08:20 AM" },
+  // PS-01: Sri Lakshmi Medicals (Kovilpatti)
+  { id: 1, shopId: "PS-01", medicineName: "Human Mixtard Insulin 40IU/ml", quantity: 12, price: 415.0, generic: "Insulin (Human)", category: "Injections", lastUpdated: "2026-10-06 05:40 PM" },
+  { id: 2, shopId: "PS-01", medicineName: "Betadine Ointment 20g", quantity: 14, price: 120.0, generic: "Povidone Iodine", category: "Ointments", lastUpdated: "2026-10-06 04:15 PM" },
+  { id: 3, shopId: "PS-01", medicineName: "Dolo 650", quantity: 65, price: 32.5, generic: "Paracetamol", category: "Tablets", lastUpdated: "2026-10-06 02:30 PM" },
+  { id: 4, shopId: "PS-01", medicineName: "Amoxicillin 500mg", quantity: 28, price: 95.0, generic: "Amoxicillin", category: "Capsules", lastUpdated: "2026-10-06 01:20 PM" },
+  { id: 5, shopId: "PS-01", medicineName: "Metformin 500mg SR", quantity: 45, price: 48.0, generic: "Metformin HCl", category: "Tablets", lastUpdated: "2026-10-05 06:10 PM" },
+  { id: 6, shopId: "PS-01", medicineName: "Pantoprazole 40mg", quantity: 30, price: 85.0, generic: "Pantoprazole", category: "Tablets", lastUpdated: "2026-10-05 11:00 AM" },
+
+  // PS-02: Apollo Medical Centre (Kovilpatti)
+  { id: 7, shopId: "PS-02", medicineName: "Human Mixtard Insulin 40IU/ml", quantity: 8, price: 420.0, generic: "Insulin (Human)", category: "Injections", lastUpdated: "2026-10-06 09:10 AM" },
+  { id: 8, shopId: "PS-02", medicineName: "Moxifloxacin Eye Drops 5ml", quantity: 9, price: 145.0, generic: "Moxifloxacin", category: "Drops", lastUpdated: "2026-10-06 08:20 AM" },
+  { id: 9, shopId: "PS-02", medicineName: "Azithromycin 500mg", quantity: 22, price: 115.0, generic: "Azithromycin", category: "Tablets", lastUpdated: "2026-10-05 04:45 PM" },
+  { id: 10, shopId: "PS-02", medicineName: "Cetirizine 10mg", quantity: 35, price: 28.0, generic: "Cetirizine HCl", category: "Tablets", lastUpdated: "2026-10-05 03:15 PM" },
+  { id: 11, shopId: "PS-02", medicineName: "Ibuprofen 400mg", quantity: 18, price: 52.0, generic: "Ibuprofen", category: "Tablets", lastUpdated: "2026-10-05 10:30 AM" },
+  { id: 12, shopId: "PS-02", medicineName: "Crocin 650 Plus", quantity: 40, price: 36.0, generic: "Paracetamol + Caffeine", category: "Tablets", lastUpdated: "2026-10-04 05:00 PM" },
+
+  // PS-03: Health Care Pharmacy (Kovilpatti)
+  { id: 13, shopId: "PS-03", medicineName: "Human Mixtard Insulin 40IU/ml", quantity: 5, price: 418.0, generic: "Insulin (Human)", category: "Injections", lastUpdated: "2026-10-06 07:50 AM" },
+  { id: 14, shopId: "PS-03", medicineName: "Omeprazole 20mg", quantity: 42, price: 45.0, generic: "Omeprazole", category: "Capsules", lastUpdated: "2026-10-05 01:10 PM" },
+  { id: 15, shopId: "PS-03", medicineName: "Cetirizine 10mg", quantity: 50, price: 25.0, generic: "Cetirizine HCl", category: "Tablets", lastUpdated: "2026-10-05 08:40 PM" },
+  { id: 16, shopId: "PS-03", medicineName: "ORS Powder", quantity: 80, price: 22.0, generic: "Oral Rehydration Salts", category: "Powders", lastUpdated: "2026-10-04 11:20 AM" },
+  { id: 17, shopId: "PS-03", medicineName: "Calcium + D3 Tablets", quantity: 60, price: 95.0, generic: "Calcium Carbonate + D3", category: "Tablets", lastUpdated: "2026-10-04 03:30 PM" },
+  { id: 18, shopId: "PS-03", medicineName: "Ascoril Cough Syrup", quantity: 25, price: 110.0, generic: "Bromhexine + Terbutaline", category: "Syrups", lastUpdated: "2026-10-04 02:15 PM" },
+
+  // PS-04: Sivan Medical Centre (Tirunelveli)
+  { id: 19, shopId: "PS-04", medicineName: "Betadine Ointment 20g", quantity: 6, price: 122.0, generic: "Povidone Iodine", category: "Ointments", lastUpdated: "2026-10-06 07:15 PM" },
+  { id: 20, shopId: "PS-04", medicineName: "Paracetamol 500mg", quantity: 75, price: 20.0, generic: "Paracetamol", category: "Tablets", lastUpdated: "2026-10-04 09:10 AM" },
+  { id: 21, shopId: "PS-04", medicineName: "Amoxicillin 500mg", quantity: 19, price: 98.0, generic: "Amoxicillin", category: "Capsules", lastUpdated: "2026-10-05 02:40 PM" },
+  { id: 22, shopId: "PS-04", medicineName: "Metformin 500mg", quantity: 34, price: 46.0, generic: "Metformin HCl", category: "Tablets", lastUpdated: "2026-10-05 11:15 AM" },
+  { id: 23, shopId: "PS-04", medicineName: "Ibuprofen 400mg", quantity: 30, price: 50.0, generic: "Ibuprofen", category: "Tablets", lastUpdated: "2026-10-04 04:20 PM" },
+  { id: 24, shopId: "PS-04", medicineName: "Pantoprazole 40mg", quantity: 24, price: 82.0, generic: "Pantoprazole", category: "Tablets", lastUpdated: "2026-10-04 10:15 AM" },
+
+  // PS-05: Meenakshi Medicals (Madurai)
+  { id: 25, shopId: "PS-05", medicineName: "Moxifloxacin Eye Drops 5ml", quantity: 4, price: 148.0, generic: "Moxifloxacin", category: "Drops", lastUpdated: "2026-10-06 08:20 AM" },
+  { id: 26, shopId: "PS-05", medicineName: "Azithromycin 500mg", quantity: 16, price: 118.0, generic: "Azithromycin", category: "Tablets", lastUpdated: "2026-10-05 05:50 PM" },
+  { id: 27, shopId: "PS-05", medicineName: "Human Mixtard Insulin 40IU/ml", quantity: 15, price: 410.0, generic: "Insulin (Human)", category: "Injections", lastUpdated: "2026-10-05 12:10 PM" },
+  { id: 28, shopId: "PS-05", medicineName: "Ascoril Cough Syrup", quantity: 30, price: 112.0, generic: "Bromhexine + Terbutaline", category: "Syrups", lastUpdated: "2026-10-04 06:15 PM" },
+  { id: 29, shopId: "PS-05", medicineName: "Calcium + D3 Tablets", quantity: 45, price: 92.0, generic: "Calcium Carbonate + D3", category: "Tablets", lastUpdated: "2026-10-04 01:45 PM" },
+  { id: 30, shopId: "PS-05", medicineName: "Crocin 650 Plus", quantity: 55, price: 35.0, generic: "Paracetamol + Caffeine", category: "Tablets", lastUpdated: "2026-10-04 11:00 AM" },
 ];
+
 
 // Prescription records for the Prescription Verification feature. Linked to
 // Sales & Billing: a prescription-required medicine cannot be billed until its
 // matching prescription (by customer + medicine) is Verified.
 export const PRESCRIPTIONS = [
+  // Kovilpatti Prescriptions
   {
     id: "RX-01",
     customerId: "CUS-02",
@@ -196,7 +258,72 @@ export const PRESCRIPTIONS = [
     verifiedBy: "R. Rajan",
     verifiedDate: "2026-08-19",
     remarks: "Valid prescription, dosage confirmed.",
+    branch: "Kovilpatti Branch",
   },
+  {
+    id: "RX-05",
+    customerId: "CUS-01",
+    customerName: "Ramya Krishnan",
+    medicine: "Pantoprazole 40mg",
+    quantity: 1,
+    doctorName: "Dr. S. Sundar",
+    prescriptionDate: "2026-08-19",
+    prescriptionRef: "RX-2295",
+    status: "Verified",
+    verifiedBy: "R. Rajan",
+    verifiedDate: "2026-08-20",
+    remarks: "Verified for chronic acid reflux.",
+    branch: "Kovilpatti Branch",
+  },
+  {
+    id: "RX-07",
+    customerId: "CUS-07",
+    customerName: "Vasanthi Murugan",
+    medicine: "Ascoril Cough Syrup",
+    quantity: 1,
+    doctorName: "Dr. R. Vignesh",
+    prescriptionDate: "2026-08-20",
+    prescriptionRef: "RX-2301",
+    status: "Pending",
+    verifiedBy: "",
+    verifiedDate: "",
+    remarks: "Awaiting pharmacist verification.",
+    branch: "Kovilpatti Branch",
+  },
+
+  // Tirunelveli Prescriptions
+  {
+    id: "RX-03",
+    customerId: "CUS-06",
+    customerName: "Karthikeyan S",
+    medicine: "Pantoprazole 40mg",
+    quantity: 1,
+    doctorName: "Dr. M. Anandhi",
+    prescriptionDate: "2026-07-10",
+    prescriptionRef: "RX-4410",
+    status: "Expired",
+    verifiedBy: "K. Meenakshi",
+    verifiedDate: "2026-07-11",
+    remarks: "Prescription older than 30 days.",
+    branch: "Tirunelveli Branch",
+  },
+  {
+    id: "RX-06",
+    customerId: "CUS-03",
+    customerName: "Lakshmi Narayanan",
+    medicine: "Amoxicillin 500mg",
+    quantity: 2,
+    doctorName: "Dr. T. Murugan",
+    prescriptionDate: "2026-08-19",
+    prescriptionRef: "RX-4418",
+    status: "Pending",
+    verifiedBy: "",
+    verifiedDate: "",
+    remarks: "Requires signature verification.",
+    branch: "Tirunelveli Branch",
+  },
+
+  // Madurai Prescriptions
   {
     id: "RX-02",
     customerId: "CUS-04",
@@ -209,21 +336,8 @@ export const PRESCRIPTIONS = [
     status: "Pending",
     verifiedBy: "",
     verifiedDate: "",
-    remarks: "",
-  },
-  {
-    id: "RX-03",
-    customerId: "CUS-06",
-    customerName: "Karthikeyan S",
-    medicine: "Pantoprazole 40mg",
-    quantity: 1,
-    doctorName: "Dr. M. Anandhi",
-    prescriptionDate: "2026-07-10",
-    prescriptionRef: "RX-4410",
-    status: "Expired",
-    verifiedBy: "Lavanya M",
-    verifiedDate: "2026-07-11",
-    remarks: "Prescription older than 30 days.",
+    remarks: "Waiting for clinical approval.",
+    branch: "Madurai Branch",
   },
   {
     id: "RX-04",
@@ -235,9 +349,10 @@ export const PRESCRIPTIONS = [
     prescriptionDate: "2026-08-15",
     prescriptionRef: "RX-5108",
     status: "Rejected",
-    verifiedBy: "R. Rajan",
+    verifiedBy: "P. Arun Kumar",
     verifiedDate: "2026-08-16",
     remarks: "Reference could not be verified with the issuing clinic.",
+    branch: "Madurai Branch",
   },
 ];
 

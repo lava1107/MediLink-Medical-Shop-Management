@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Menu, Search, Building, Bell, ChevronDown, ChevronRight, Settings,
   Clock, Languages, KeyRound, ShieldCheck, Trash2, ArrowUpRight,
+  Sun, Moon, Mail, User, Palette, Check,
 } from "lucide-react";
 import { T } from "../../utils/theme.js";
 import { useAuth } from "../../hooks/useAuth.js";
@@ -10,6 +11,8 @@ import { useApp } from "../../hooks/useApp.js";
 import { BRANCHES } from "../../data/mockData.js";
 import { useTranslation } from "../../context/LanguageContext.jsx";
 import { useRecent } from "../../context/RecentContext.jsx";
+import { useTheme } from "../../context/ThemeContext.jsx";
+import { api } from "../../services/api.js";
 
 const PAGE_TITLES = {
   dashboard: "Dashboard",
@@ -27,6 +30,7 @@ const PAGE_TITLES = {
   availability: "Medicine Availability",
   partners: "Partner Medical Shops",
   reports: "Reports",
+  communication: "Communication Hub",
   notifications: "Notifications",
   settings: "Settings",
   "api-access": "API Access",
@@ -37,12 +41,22 @@ export default function Navbar({ toggleSidebar }) {
   const { db, notifications, markAllRead } = useApp();
   const { t, lang, setLang, languages } = useTranslation();
   const { recentItems, clearRecent } = useRecent();
+  const {
+    theme,
+    isDark,
+    toggleTheme,
+    colorTheme,
+    setColorTheme,
+    colorThemes,
+    activePalette,
+  } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [showNotif, setShowNotif] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
+  const [showColorMenu, setShowColorMenu] = useState(false);
 
   const segment = location.pathname.split("/").filter(Boolean)[0] || "dashboard";
   const rawTitle = PAGE_TITLES[segment] || "MediLink";
@@ -217,6 +231,96 @@ export default function Navbar({ toggleSidebar }) {
           )}
         </div>
 
+
+        {/* 5 Color Theme Pairs / Groups Quick Switcher */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              setShowColorMenu((v) => !v);
+              setShowNotif(false);
+              setShowProfile(false);
+              setShowRecent(false);
+              setShowLangMenu(false);
+            }}
+            className="w-9 h-9 rounded-xl border flex items-center justify-center transition-all hover:bg-slate-100 dark:hover:bg-slate-800"
+            style={{ borderColor: T.border }}
+            title={`Active Color Theme: ${activePalette?.name} (Click to switch between 5 pairs)`}
+            aria-label="Select Color Theme"
+          >
+            <div className="flex items-center -space-x-1">
+              <span
+                className="w-2.5 h-2.5 rounded-full border border-white shadow-2xs"
+                style={{ backgroundColor: activePalette?.pair[0] || "#1D6FA5" }}
+              />
+              <span
+                className="w-2.5 h-2.5 rounded-full border border-white shadow-2xs"
+                style={{ backgroundColor: activePalette?.pair[1] || "#132335" }}
+              />
+            </div>
+          </button>
+          {showColorMenu && (
+            <div
+              className="absolute right-0 top-11 w-64 bg-white rounded-2xl border shadow-xl z-40 overflow-hidden py-1.5"
+              style={{ borderColor: T.border }}
+            >
+              <div
+                className="px-3.5 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b flex items-center justify-between"
+                style={{ borderColor: T.border }}
+              >
+                <span>5 Color Themes (Pairs)</span>
+                <span className="font-mono text-[9px] lowercase text-blue-600">group palettes</span>
+              </div>
+              {(colorThemes || []).map((ct) => (
+                <button
+                  key={ct.id}
+                  onClick={() => {
+                    setColorTheme(ct.id);
+                    setShowColorMenu(false);
+                  }}
+                  className={`w-full text-left px-3.5 py-2 text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${
+                    colorTheme === ct.id ? "font-bold text-blue-600 bg-blue-50/50" : "text-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex items-center -space-x-1 shrink-0">
+                      <span
+                        className="w-3.5 h-3.5 rounded-full border border-white shadow-2xs"
+                        style={{ backgroundColor: ct.pair[0] }}
+                      />
+                      <span
+                        className="w-3.5 h-3.5 rounded-full border border-white shadow-2xs"
+                        style={{ backgroundColor: ct.pair[1] }}
+                      />
+                    </div>
+                    <div>
+                      <div className="font-medium text-xs text-slate-800">{ct.name}</div>
+                      <div className="text-[10px] text-slate-400 leading-tight">{ct.subtitle}</div>
+                    </div>
+                  </div>
+                  {colorTheme === ct.id && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Theme Toggle (Light / Dark) */}
+        <button
+          onClick={toggleTheme}
+          className="w-9 h-9 rounded-xl border flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+          style={{ borderColor: T.border }}
+          title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          aria-label="Toggle theme"
+        >
+          {isDark ? (
+            <Sun size={16} className="text-amber-400 transition-transform hover:rotate-45" />
+          ) : (
+            <Moon size={16} className="text-slate-600 transition-transform hover:-rotate-12" />
+          )}
+        </button>
+
         <div className="relative">
           <button
             onClick={() => {
@@ -306,12 +410,30 @@ export default function Navbar({ toggleSidebar }) {
               </div>
               <button
                 onClick={() => {
+                  navigate("/settings?tab=profile");
+                  setShowProfile(false);
+                }}
+                className="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 text-slate-700"
+              >
+                <User size={13} className="text-blue-600" /> My Profile
+              </button>
+              <button
+                onClick={() => {
                   navigate("/api-access");
                   setShowProfile(false);
                 }}
                 className="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 text-slate-700"
               >
                 <KeyRound size={13} className="text-blue-600" /> Developer API Portal
+              </button>
+              <button
+                onClick={() => {
+                  navigate("/communication");
+                  setShowProfile(false);
+                }}
+                className="w-full text-left px-4 py-2 text-xs hover:bg-slate-50 flex items-center gap-2 text-slate-700"
+              >
+                <Mail size={13} className="text-emerald-600" /> Communication Hub
               </button>
               <button
                 onClick={() => {

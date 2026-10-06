@@ -25,29 +25,29 @@ export default function PharmacistDashboard() {
   const navigate = useNavigate();
   const [safetyModalOpen, setSafetyModalOpen] = useState(false);
 
-  const branchSales = db.sales.filter((s) => s.branch === user.branch);
-  const todaySales = branchSales.filter((s) => s.date === TODAY).reduce((a, s) => a + s.amount, 0);
-  const todayBills = branchSales.filter((s) => s.date === TODAY).length;
-  const branchBatches = db.batches.filter((b) => b.branchName === user.branch);
-  const lowStock = branchBatches.filter((b) => b.available > 0 && b.available <= 20).length;
+  const branchSales = db.sales.filter((s) => s.branch === user.branch || s.branchName === user.branch);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todaySales = branchSales
+    .filter((s) => s.date === todayStr || s.date === TODAY)
+    .reduce((a, s) => a + Number(s.amount || 0), 0);
+  const todayBills = branchSales.filter((s) => s.date === todayStr || s.date === TODAY).length;
+  const branchBatches = db.batches.filter((b) => b.branchName === user.branch || b.branchId === user.branchId);
+  const lowStock = branchBatches.filter((b) => Number(b.available) > 0 && Number(b.available) <= 20).length;
   const nearExpiry = branchBatches.filter((b) => b.status === "Expiring Soon").length;
-  const pendingRes = db.reservations.filter((r) => r.branch === user.branch && (r.status === "Pending" || r.status === "Reserved")).length;
+  const pendingRes = db.reservations.filter((r) => (r.branch === user.branch || r.branchName === user.branch) && (r.status === "Pending" || r.status === "Reserved")).length;
+
+  const todayFormatted = new Date().toLocaleDateString("en-IN", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
   return (
     <div>
       <PageHeader
-        title={`Welcome back, ${user.name.split(" ")[0]}`}
-        subtitle={`${user.branch} · Thursday, 20 August 2026 · RFC 7519 JWT Active`}
-        actions={
-          <button
-            onClick={() => setSafetyModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border bg-white text-blue-700 hover:bg-blue-50 text-xs font-semibold shadow-2xs"
-            style={{ borderColor: T.border }}
-          >
-            <ShieldCheck size={14} className="text-blue-600" />
-            Clinical DDI Safety
-          </button>
-        }
+        title={`Welcome back, ${user?.name ? user.name.split(" ")[0] : "Pharmacist"}`}
+        subtitle={`${user.branch} · ${todayFormatted}`}
       />
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
         <StatCard icon={ShoppingCart} label={t("totalSales", "Today's Sales")} value={formatCurrency(todaySales)} tone="green" onClick={() => navigate("/reports/daily-sales")} />
@@ -80,8 +80,8 @@ export default function PharmacistDashboard() {
             <Btn variant="secondary" icon={CalendarClock} onClick={() => navigate("/reservations")}>
               Reserve Medicine
             </Btn>
-            <Btn variant="secondary" icon={ShieldCheck} onClick={() => setSafetyModalOpen(true)}>
-              DDI Safety
+            <Btn variant="secondary" icon={Clock} onClick={() => navigate("/reports/daily-sales")}>
+              Daily Sales
             </Btn>
           </div>
         </div>

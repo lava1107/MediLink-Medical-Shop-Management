@@ -6,20 +6,23 @@ import { AuthProvider } from "./context/AuthContext.jsx";
 import { AppProvider } from "./context/AppContext.jsx";
 import { LanguageProvider } from "./context/LanguageContext.jsx";
 import { RecentProvider } from "./context/RecentContext.jsx";
+import { ThemeProvider } from "./context/ThemeContext.jsx";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
-      <LanguageProvider>
-        <RecentProvider>
-          <AuthProvider>
-            <AppProvider>
-              <App />
-            </AppProvider>
-          </AuthProvider>
-        </RecentProvider>
-      </LanguageProvider>
+      <ThemeProvider>
+        <LanguageProvider>
+          <RecentProvider>
+            <AuthProvider>
+              <AppProvider>
+                <App />
+              </AppProvider>
+            </AuthProvider>
+          </RecentProvider>
+        </LanguageProvider>
+      </ThemeProvider>
     </BrowserRouter>
   </React.StrictMode>
 );

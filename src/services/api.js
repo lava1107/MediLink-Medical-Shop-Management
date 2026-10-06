@@ -74,6 +74,18 @@ export const api = {
   put: (endpoint, body, options) => request(endpoint, { ...options, method: "PUT", body }),
   patch: (endpoint, body, options) => request(endpoint, { ...options, method: "PATCH", body }),
   delete: (endpoint, options) => request(endpoint, { ...options, method: "DELETE" }),
+  checkHealth: async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/health`);
+      if (res.ok) {
+        const data = await res.json();
+        return { connected: true, data };
+      }
+      return { connected: false, error: `HTTP ${res.status}` };
+    } catch (e) {
+      return { connected: false, error: e.message };
+    }
+  },
   baseUrl: API_BASE_URL,
 };
 

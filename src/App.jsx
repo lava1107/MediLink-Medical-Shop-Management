@@ -29,16 +29,20 @@ import ReportDetailPage from "./pages/reports/ReportDetailPage.jsx";
 import NotificationsPage from "./pages/notifications/NotificationsPage.jsx";
 import SettingsPage from "./pages/settings/SettingsPage.jsx";
 import ApiAccessPage from "./pages/api/ApiAccessPage.jsx";
+import CommunicationPage from "./pages/communication/CommunicationPage.jsx";
+import GoogleCallbackPage from "./pages/auth/GoogleCallbackPage.jsx";
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
 
       {/* All routes below require authentication */}
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/profile" element={<Navigate to="/settings?tab=profile" replace />} />
 
           {/* Admin-only sections */}
           <Route element={<RoleRoute allow={["Admin"]} />}>
@@ -65,6 +69,7 @@ export default function App() {
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/reports/:key" element={<ReportDetailPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/communication" element={<CommunicationPage />} />
           <Route path="/api-access" element={<ApiAccessPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>

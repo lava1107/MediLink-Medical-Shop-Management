@@ -102,7 +102,12 @@ export async function create(req, res, next) {
   try {
     await connection.beginTransaction();
 
-    const { supplier, branch, items, grandTotal, paymentStatus, purchasedBy } = req.body;
+    const supplier = req.body.supplier || req.body.supplierId;
+    const branch = req.body.branch || req.body.branchId || "Kovilpatti Branch";
+    const items = req.body.items || req.body.cart;
+    const grandTotal = req.body.grandTotal ?? req.body.amount;
+    const paymentStatus = req.body.paymentStatus || req.body.payment || "Completed";
+    const purchasedBy = req.body.purchasedBy || req.user?.name || "Admin";
 
     if (!supplier || !branch || !items || !Array.isArray(items) || items.length === 0) {
       await connection.rollback();
@@ -134,13 +139,24 @@ export async function create(req, res, next) {
     const branchName = branchRows[0].name;
 
     // Count existing purchases for ID & invoice formatting
-    const [[{ pCount }]] = await connection.query("SELECT COUNT(*) AS pCount FROM purchases");
+    const [countRows] = await connection.query("SELECT COUNT(*) AS pCount FROM purchases");
+    const pCount = Number(countRows[0]?.pCount || 0);
     const purchaseId = `PUR-${String(pCount + 1).padStart(2, "0")}`;
     const invoicePrefix = supplierName.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 3);
     const invoice = `${invoicePrefix}/INV/${1000 + pCount + 1}`;
     const today = new Date().toISOString().slice(0, 10);
 
     const totalAmount = Math.round(Number(grandTotal) || 0);
+
+    let validPayment = "Paid";
+    if (["Paid", "Pending", "Partially Paid"].includes(paymentStatus)) {
+      validPayment = paymentStatus;
+    }
+
+    let validStatus = "Received";
+    if (["Received", "Ordered"].includes(req.body.status)) {
+      validStatus = req.body.status;
+    }
 
     // 1. Insert Purchase
     await connection.query(
@@ -154,8 +170,8 @@ export async function create(req, res, next) {
         purchasedBy || "Admin",
         today,
         totalAmount,
-        paymentStatus || "Pending",
-        "Received",
+        validPayment,
+        validStatus,
       ]
     );
 
@@ -164,22 +180,23 @@ export async function create(req, res, next) {
     // 2. Process Items & Batches
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
+      const medRef = it.medicine || it.medicineId || it.name;
 
       // Find medicine
       const [medRows] = await connection.query(
         "SELECT id, name, generic, selling_price, gst FROM medicines WHERE LOWER(name) = LOWER(?) OR id = ?",
-        [it.medicine, it.medicine]
+        [medRef, medRef]
       );
       if (medRows.length === 0) {
         await connection.rollback();
-        return error(res, `Medicine '${it.medicine}' not found in catalogue.`, 404);
+        return error(res, `Medicine '${medRef}' not found in catalogue.`, 404);
       }
       const med = medRows[0];
 
-      const qty = Number(it.qty) || 0;
-      const price = Number(it.price) || 0;
-      const discount = Number(it.discount) || 0;
-      const gst = Number(it.gst) || 12;
+      const qty = Number(it.qty ?? it.quantity ?? 1);
+      const price = Number(it.price ?? it.purchasePrice ?? it.unitCost ?? 0);
+      const discount = Number(it.discount ?? 0);
+      const gst = Number(it.gst ?? 12);
       const lineSubtotal = qty * price;
       const lineTotal = Math.round(lineSubtotal - (lineSubtotal * discount) / 100 + ((lineSubtotal - (lineSubtotal * discount) / 100) * gst) / 100);
 

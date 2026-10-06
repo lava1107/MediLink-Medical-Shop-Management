@@ -40,7 +40,7 @@ export default function DrugSafetyModal({ isOpen, onClose, initialMedicines = []
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Clinical Drug-Drug Interaction Safety Checker"
+      title="Medicine Combination & Safety Checker"
       maxWidth="max-w-2xl"
     >
       <div className="space-y-5">

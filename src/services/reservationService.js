@@ -68,3 +68,21 @@ export async function deleteReservation(id) {
   }
 }
 
+export async function notifyStockQueue(payload) {
+  try {
+    return await api.post("/reservations/notify-stock", payload);
+  } catch (err) {
+    console.warn("Backend notify-stock error:", err.message);
+    throw err;
+  }
+}
+
+export async function sendReservationSMS(id, payload) {
+  try {
+    return await api.post(`/reservations/${id}/send-sms`, payload);
+  } catch (err) {
+    console.warn("Backend send-sms error:", err.message);
+    throw err;
+  }
+}
+

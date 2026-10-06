@@ -14,11 +14,22 @@ import IconBtn from "../../components/common/IconBtn.jsx";
 import Modal from "../../components/common/Modal.jsx";
 import { FormInput, FormSelect } from "../../components/common/FormControls.jsx";
 
+import { useAuth } from "../../hooks/useAuth.js";
+import BranchTabs from "../../components/common/BranchTabs.jsx";
+import { isBranchAll, matchBranch } from "../../utils/branchUtils.js";
+
 export default function MedicinesPage() {
   const { db, setDb, toast, refreshDb } = useApp();
+  const { currentBranch } = useAuth();
   const navigate = useNavigate();
   const [modal, setModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
+
+  const isAll = isBranchAll(currentBranch);
+  const branchBatches = isAll
+    ? (db.batches || [])
+    : (db.batches || []).filter((b) => matchBranch(b.branchName, currentBranch) || matchBranch(b.branchId, currentBranch));
+
   const [form, setForm] = useState({
     name: "",
     generic: "",
@@ -36,14 +47,14 @@ export default function MedicinesPage() {
   });
 
   const rows = db.medicines.map((m) => {
-    const medBatches = (db.batches || []).filter(
+    const medBatches = branchBatches.filter(
       (b) => b.medicineId === m.id || b.medicine_id === m.id || b.medicineName === m.name
     );
     const racks = [...new Set(medBatches.map((b) => b.rack).filter(Boolean))].join(", ");
     return {
       ...m,
-      stock: medicineStock(m, db.batches),
-      rack: racks || "Rack A1",
+      stock: medicineStock(m, branchBatches),
+      rack: racks || (isAll ? "Multi-Branch" : "Rack A1"),
     };
   });
 
@@ -58,6 +69,7 @@ export default function MedicinesPage() {
   });
 
   function openAdd() {
+    const defBranch = !isAll && currentBranch ? currentBranch : (db.branches?.[0]?.name || "Kovilpatti Branch");
     setEditingId(null);
     setForm({
       name: "",
@@ -74,7 +86,7 @@ export default function MedicinesPage() {
       rx: false,
       status: "Active",
       initialStock: 100,
-      branch: db.branches?.[0]?.name || "Kovilpatti Branch",
+      branch: defBranch,
       rack: "A1-01",
       batchNo: `BAT-${Math.floor(1000 + Math.random() * 9000)}`,
       expiryDate: new Date(Date.now() + 365 * 86400000).toISOString().split("T")[0],
@@ -83,9 +95,10 @@ export default function MedicinesPage() {
   }
 
   function openQuickStock(med) {
+    const defBranch = !isAll && currentBranch ? currentBranch : (db.branches?.[0]?.name || "Kovilpatti Branch");
     setQuickStockTarget(med);
     setQuickStockForm({
-      branch: db.branches?.[0]?.name || "Kovilpatti Branch",
+      branch: defBranch,
       batchNo: `BAT-${Math.floor(1000 + Math.random() * 9000)}`,
       available: 100,
       rack: "A1-01",
@@ -264,16 +277,23 @@ export default function MedicinesPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Medicines"
-        subtitle="Manage the full medicine catalogue"
-        crumbs={["MediLink", "Medicines"]}
-        action={
-          <Btn icon={Plus} onClick={openAdd}>
-            Add Medicine
-          </Btn>
-        }
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <PageHeader
+          title="Medicines"
+          subtitle={
+            isAll
+              ? "Manage the full medicine catalogue across all branches"
+              : `Catalogue stock & rack locations for ${currentBranch}`
+          }
+          crumbs={["MediLink", "Medicines"]}
+          action={
+            <Btn icon={Plus} onClick={openAdd}>
+              Add Medicine
+            </Btn>
+          }
+        />
+        <BranchTabs />
+      </div>
       <DataTable
         columns={[
           { key: "id", label: "Medicine ID", sortable: true },

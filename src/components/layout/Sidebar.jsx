@@ -3,7 +3,7 @@ import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard, Users, Building2, Pill, Tags, PackageSearch, Truck, ShoppingCart,
   UserRound, CalendarClock, MapPinned, Handshake, BarChart3, Bell, Settings, LogOut,
-  ClipboardList, Menu, FileCheck2, KeyRound,
+  ClipboardList, Menu, FileCheck2, KeyRound, Mail,
 } from "lucide-react";
 import { T } from "../../utils/theme.js";
 import { classNames } from "../../utils/format.js";
@@ -27,6 +27,7 @@ const NAV_ADMIN = [
   { to: "/availability", label: "Medicine Availability", key: "availability", icon: MapPinned },
   { to: "/partners", label: "Partner Medical Shops", key: "partners", icon: Handshake },
   { to: "/reports", label: "Reports", key: "reports", icon: BarChart3 },
+  { to: "/communication", label: "Communication Hub", key: "communication", icon: Mail },
   { to: "/api-access", label: "API Access", key: "apiAccess", icon: KeyRound },
   { to: "/notifications", label: "Notifications", key: "notifications", icon: Bell },
   { to: "/settings", label: "Settings", key: "settings", icon: Settings },
@@ -43,6 +44,7 @@ const NAV_PHARMACIST = [
   { to: "/availability", label: "Medicine Availability", key: "availability", icon: MapPinned },
   { to: "/partners", label: "Partner Medical Shops", key: "partners", icon: Handshake },
   { to: "/reports", label: "Reports", key: "reports", icon: BarChart3 },
+  { to: "/communication", label: "Communication Hub", key: "communication", icon: Mail },
   { to: "/api-access", label: "API Access", key: "apiAccess", icon: KeyRound },
   { to: "/notifications", label: "Notifications", key: "notifications", icon: Bell },
   { to: "/settings", label: "Profile", key: "settings", icon: Settings },

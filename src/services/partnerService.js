@@ -39,3 +39,34 @@ export async function getPartnerMedicines() {
   return await api.get("/partner-shops/medicines");
 }
 
+export async function getShopMedicines(shopId) {
+  return await api.get(`/partner-shops/${shopId}/medicines`);
+}
+
+export async function addShopMedicine(shopId, payload) {
+  try {
+    return await api.post(`/partner-shops/${shopId}/medicines`, payload);
+  } catch (err) {
+    console.warn("Backend unavailable, adding medicine locally:", err.message);
+    return { id: Date.now(), shopId, ...payload, lastUpdated: new Date().toLocaleString() };
+  }
+}
+
+export async function updateShopMedicine(shopId, medId, payload) {
+  try {
+    return await api.put(`/partner-shops/${shopId}/medicines/${medId}`, payload);
+  } catch (err) {
+    console.warn("Backend unavailable, updating medicine locally:", err.message);
+    return { id: medId, shopId, ...payload, lastUpdated: new Date().toLocaleString() };
+  }
+}
+
+export async function deleteShopMedicine(shopId, medId) {
+  try {
+    return await api.delete(`/partner-shops/${shopId}/medicines/${medId}`);
+  } catch (err) {
+    console.warn("Backend unavailable, deleting medicine locally:", err.message);
+    return { id: medId };
+  }
+}
+

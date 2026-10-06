@@ -1,5 +1,22 @@
 import React, { useState } from "react";
-import { Search, X, Trash2, Plus, ShoppingCart, Banknote, CreditCard, Smartphone, AlertTriangle, ShieldAlert, ShieldCheck } from "lucide-react";
+import {
+  Search,
+  X,
+  Trash2,
+  Plus,
+  ShoppingCart,
+  Banknote,
+  CreditCard,
+  Smartphone,
+  AlertTriangle,
+  ShieldAlert,
+  ShieldCheck,
+  FileText,
+  Download,
+  Printer,
+  CheckCircle2,
+  History,
+} from "lucide-react";
 import { useApp } from "../../hooks/useApp.js";
 import { useAuth } from "../../hooks/useAuth.js";
 import { createSale } from "../../services/salesService.js";
@@ -7,7 +24,7 @@ import { generateInvoicePdf } from "../../utils/invoicePdf.js";
 import { findPrescription, createPrescription, verifyPrescription, rejectPrescription } from "../../services/prescriptionService.js";
 import { createCustomer } from "../../services/customerService.js";
 import { medicineStock } from "../../services/medicineService.js";
-import { formatCurrency, pad } from "../../utils/format.js";
+import { formatCurrency, formatDate, pad } from "../../utils/format.js";
 import { T } from "../../utils/theme.js";
 import PageHeader from "../../components/common/PageHeader.jsx";
 import EmptyState from "../../components/common/EmptyState.jsx";
@@ -32,6 +49,7 @@ export default function POSPage() {
   const [payment, setPayment] = useState("Cash");
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", address: "" });
+  const [billSuccessModal, setBillSuccessModal] = useState(null);
 
   // Prescription verification (gates Generate Bill for Rx-required cart items)
   const [rxRecordModal, setRxRecordModal] = useState(null); // { item } -> shows "create prescription record" form
@@ -208,26 +226,52 @@ export default function POSPage() {
       toast(`Bill ${newSale.bill} generated successfully.`);
 
       // Build a real, downloadable PDF invoice for this sale.
-      const branchObj = db.branches.find((b) => b.name === activeBranch);
+      const branchObj = (db.branches || []).find((b) => b.name === activeBranch || b.id === activeBranch) || {
+        name: activeBranch,
+        address: "12, VOC Street, Bus Stand Road",
+        city: "Kovilpatti",
+        phone: "+91 98421 30221",
+        email: "kovilpatti@medilink.in",
+      };
+
       const invoiceItems = cart.map((i) => {
-        const med = db.medicines.find((m) => m.id === i.medicineId);
-        const batch = db.batches.find((b) => b.id === i.batchId);
+        const med = (db.medicines || []).find((m) => m.id === i.medicineId);
+        const batch = (db.batches || []).find((b) => b.id === i.batchId);
         const lineSubtotal = i.price * i.qty;
-        const lineDiscount = (lineSubtotal * i.discount) / 100;
-        const lineGst = ((lineSubtotal - lineDiscount) * i.gst) / 100;
+        const lineDiscount = (lineSubtotal * (i.discount || 0)) / 100;
+        const lineGst = ((lineSubtotal - lineDiscount) * (i.gst || 12)) / 100;
         return {
           name: i.name,
-          generic: med?.generic,
+          generic: med?.generic || "",
           batchNo: i.batchNo,
           expiryDate: batch?.expiryDate,
           qty: i.qty,
           price: i.price,
-          discount: i.discount,
-          gst: i.gst,
+          discount: i.discount || 0,
+          gst: i.gst || 12,
           lineTotal: lineSubtotal - lineDiscount + lineGst,
         };
       });
-      generateInvoicePdf({
+
+      let pdfResult = null;
+      try {
+        pdfResult = generateInvoicePdf({
+          sale: newSale,
+          branch: branchObj,
+          customerName: billingCustomerName,
+          items: invoiceItems,
+          subtotal,
+          discount,
+          gst,
+          grandTotal,
+        });
+        toast(`Invoice PDF generated & downloaded: ${pdfResult.filename}`, "success");
+      } catch (pdfErr) {
+        console.error("PDF generation error:", pdfErr);
+        toast(`Bill created, but PDF download failed: ${pdfErr.message}`, "error");
+      }
+
+      setBillSuccessModal({
         sale: newSale,
         branch: branchObj,
         customerName: billingCustomerName,
@@ -236,6 +280,7 @@ export default function POSPage() {
         discount,
         gst,
         grandTotal,
+        pdfResult,
       });
 
       setCart([]);
@@ -246,22 +291,50 @@ export default function POSPage() {
     }
   }
 
+  function handleReprintPdf(s) {
+    const branchObj = (db.branches || []).find((b) => b.name === s.branch || b.id === s.branch) || {
+      name: s.branch || activeBranch,
+      address: "12, VOC Street, Bus Stand Road",
+      city: "Kovilpatti",
+      phone: "+91 98421 30221",
+      email: "kovilpatti@medilink.in",
+    };
+    const items = s.items && s.items.length > 0 ? s.items : [
+      {
+        name: "Prescription Item (" + (s.bill || "Medicine") + ")",
+        generic: "Pharmaceutical Formulation",
+        batchNo: "BT-2026",
+        expiryDate: "2027-12-31",
+        qty: 1,
+        price: Number(s.amount || s.total || 0),
+        discount: Number(s.discount || 0),
+        gst: Number(s.gst || 0),
+        lineTotal: Number(s.amount || s.total || 0),
+      },
+    ];
+    try {
+      const res = generateInvoicePdf({
+        sale: s,
+        branch: branchObj,
+        customerName: s.customer || "Walk-in Customer",
+        items,
+        subtotal: s.subtotal || s.amount,
+        discount: s.discount || 0,
+        gst: s.gst || 0,
+        grandTotal: s.amount,
+      });
+      toast(`Downloaded Invoice: ${res.filename}`, "success");
+    } catch (err) {
+      toast(`PDF reprint failed: ${err.message}`, "error");
+    }
+  }
+
   return (
     <div>
       <PageHeader
         title="Sales & Billing"
         subtitle={`Point of Sale · ${activeBranch}`}
         crumbs={["MediLink", "Sales & Billing"]}
-        actions={
-          <button
-            onClick={() => setSafetyModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border bg-white text-blue-700 hover:bg-blue-50 transition-colors shadow-2xs"
-            style={{ borderColor: T.border }}
-          >
-            <ShieldCheck size={14} className="text-blue-600" />
-            Clinical DDI Checker
-          </button>
-        }
       />
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
         <div className="lg:col-span-3 bg-white rounded-2xl border p-5" style={{ borderColor: T.border }}>
@@ -489,75 +562,21 @@ export default function POSPage() {
             </Btn>
           </div>
           {/* Clinical Drug-Drug Interaction Safety Alert */}
-          {cart.length > 0 && (() => {
-            const safety = analyzePrescriptionSafety(cart);
-            const hasCritical = safety.allIssues?.some((i) => i.severity === "Critical");
-            const ddiBlocked = hasCritical && !safetyOverride;
-
-            return (
-              <>
-                {safety.hasAlerts && (
-                  <div
-                    className={`p-2.5 rounded-xl border mt-2 text-xs ${
-                      hasCritical
-                        ? "bg-red-50 border-red-200 text-red-900"
-                        : "bg-amber-50 border-amber-200 text-amber-900"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between font-bold mb-1">
-                      <span className="flex items-center gap-1.5">
-                        {hasCritical ? (
-                          <ShieldAlert size={14} className="text-red-600" />
-                        ) : (
-                          <AlertTriangle size={14} className="text-amber-600" />
-                        )}
-                        Drug-Drug Interaction ({safety.allIssues.length})
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setSafetyModalOpen(true)}
-                        className="text-[11px] underline font-semibold text-blue-700 hover:text-blue-800"
-                      >
-                        Inspect
-                      </button>
-                    </div>
-                    <p className="text-[11px] leading-tight mb-2 opacity-90">
-                      {safety.allIssues[0].title}
-                    </p>
-                    {hasCritical && (
-                      <label className="flex items-center gap-2 text-[11px] font-semibold cursor-pointer pt-1.5 border-t border-red-200">
-                        <input
-                          type="checkbox"
-                          checked={safetyOverride}
-                          onChange={(e) => setSafetyOverride(e.target.checked)}
-                          className="rounded text-blue-600"
-                        />
-                        Pharmacist Clinical Override Confirmed
-                      </label>
-                    )}
-                  </div>
-                )}
-
-                {billingBlocked && (
-                  <div className="flex items-center gap-1.5 text-[11px] font-medium mt-2 px-2.5 py-2 rounded-lg" style={{ background: T.amberTint, color: T.amber }}>
-                    <AlertTriangle size={13} />
-                    Verify {rxBlockedItems.length === 1 ? "this prescription" : "all prescriptions"} before billing.
-                  </div>
-                )}
-                {ddiBlocked && !billingBlocked && (
-                  <div className="flex items-center gap-1.5 text-[11px] font-medium mt-2 px-2.5 py-2 rounded-lg bg-red-100 text-red-800">
-                    <ShieldAlert size={13} />
-                    Severe drug interaction detected. Verify clinical override before generating bill.
-                  </div>
-                )}
-                <div className="mt-2">
-                  <Btn size="lg" onClick={generateBill} disabled={billingBlocked || ddiBlocked || cart.length === 0}>
-                    Generate Bill · {formatCurrency(grandTotal)}
-                  </Btn>
+          {cart.length > 0 && (
+            <>
+              {billingBlocked && (
+                <div className="flex items-center gap-1.5 text-[11px] font-medium mt-2 px-2.5 py-2 rounded-lg" style={{ background: T.amberTint, color: T.amber }}>
+                  <AlertTriangle size={13} />
+                  Verify {rxBlockedItems.length === 1 ? "this prescription" : "all prescriptions"} before billing.
                 </div>
-              </>
-            );
-          })()}
+              )}
+              <div className="mt-2">
+                <Btn size="lg" onClick={generateBill} disabled={billingBlocked || cart.length === 0}>
+                  Generate Bill · {formatCurrency(grandTotal)}
+                </Btn>
+              </div>
+            </>
+          )}
 
           {cart.length === 0 && (
             <div className="mt-2">
@@ -566,6 +585,75 @@ export default function POSPage() {
               </Btn>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Recent Invoices & Bills Section */}
+      <div className="mt-8 bg-white rounded-2xl border p-5 shadow-2xs" style={{ borderColor: T.border }}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: T.blueTint, color: T.blue }}>
+              <History size={16} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold" style={{ color: T.navy }}>
+                Recent Invoices & Bills ({activeBranch})
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                Click "Download PDF" on any bill below to generate and download an authenticated tax invoice instantly.
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
+            {(db.sales || []).length} Recorded Bills
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b text-slate-400 font-semibold" style={{ borderColor: T.borderSoft }}>
+                <th className="pb-2.5 pl-2">Bill Number</th>
+                <th className="pb-2.5">Date</th>
+                <th className="pb-2.5">Customer</th>
+                <th className="pb-2.5">Branch</th>
+                <th className="pb-2.5">Payment</th>
+                <th className="pb-2.5 text-right">Amount</th>
+                <th className="pb-2.5 text-center pr-2">PDF Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y" style={{ borderColor: T.borderSoft }}>
+              {(db.sales || []).slice(0, 6).map((s) => (
+                <tr key={s.id || s.bill} className="hover:bg-slate-50/60 transition-colors">
+                  <td className="py-2.5 pl-2 font-mono font-bold" style={{ color: T.blue }}>
+                    {s.bill}
+                  </td>
+                  <td className="py-2.5 text-slate-600 font-mono text-[11px]">{formatDate(s.date)}</td>
+                  <td className="py-2.5 font-medium text-slate-800">{s.customer || "Walk-in Customer"}</td>
+                  <td className="py-2.5 text-slate-500 text-[11px]">{s.branch}</td>
+                  <td className="py-2.5">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700">
+                      {s.payment || "Cash"}
+                    </span>
+                  </td>
+                  <td className="py-2.5 text-right font-bold text-slate-900 font-mono">
+                    {formatCurrency(s.amount)}
+                  </td>
+                  <td className="py-2.5 text-center pr-2">
+                    <button
+                      onClick={() => handleReprintPdf(s)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[11px] font-semibold text-blue-700 hover:bg-blue-50 hover:border-blue-300 transition-all shadow-2xs"
+                      style={{ borderColor: T.border }}
+                      title={`Download PDF for ${s.bill}`}
+                    >
+                      <Download size={13} className="text-blue-600" />
+                      <span>Download PDF</span>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -646,6 +734,113 @@ export default function POSPage() {
           <FormInput label="Address" value={newCustomer.address} onChange={(e) => setNewCustomer((c) => ({ ...c, address: e.target.value }))} />
         </div>
       </Modal>
+
+      {/* Bill & Tax Invoice Generated Modal */}
+      {billSuccessModal && (
+        <Modal
+          open={true}
+          onClose={() => setBillSuccessModal(null)}
+          title="Tax Invoice Generated Successfully"
+          maxWidth="max-w-lg"
+          footer={
+            <div className="flex items-center justify-between w-full">
+              <Btn variant="secondary" onClick={() => setBillSuccessModal(null)}>
+                Start New Bill
+              </Btn>
+              <div className="flex items-center gap-2">
+                {billSuccessModal.pdfResult?.blobUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const w = window.open(billSuccessModal.pdfResult.blobUrl, "_blank");
+                      if (w) w.focus();
+                    }}
+                    className="px-3.5 py-2 rounded-xl border text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 transition-colors"
+                    style={{ borderColor: T.border }}
+                  >
+                    <Printer size={14} />
+                    <span>Print / Preview</span>
+                  </button>
+                )}
+                <Btn
+                  onClick={() => {
+                    generateInvoicePdf({
+                      sale: billSuccessModal.sale,
+                      branch: billSuccessModal.branch,
+                      customerName: billSuccessModal.customerName,
+                      items: billSuccessModal.items,
+                      subtotal: billSuccessModal.subtotal,
+                      discount: billSuccessModal.discount,
+                      gst: billSuccessModal.gst,
+                      grandTotal: billSuccessModal.grandTotal,
+                    });
+                    toast("Invoice PDF downloaded!", "success");
+                  }}
+                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Download size={14} />
+                  <span>Download PDF</span>
+                </Btn>
+              </div>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <div className="flex items-center gap-3.5 p-4 rounded-2xl bg-emerald-50 border border-emerald-200">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                <CheckCircle2 size={24} />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-emerald-950">Official Tax Invoice Downloaded</h4>
+                <p className="text-xs text-emerald-800 mt-0.5">
+                  Bill <strong>{billSuccessModal.sale?.bill}</strong> is generated and recorded. A GST-compliant PDF invoice has been downloaded to your computer.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="p-3 rounded-xl border bg-slate-50/70" style={{ borderColor: T.border }}>
+                <div className="text-[11px] text-slate-500">Invoice Number</div>
+                <div className="font-bold text-slate-900 text-sm mt-0.5 font-mono">{billSuccessModal.sale?.bill}</div>
+              </div>
+              <div className="p-3 rounded-xl border bg-slate-50/70" style={{ borderColor: T.border }}>
+                <div className="text-[11px] text-slate-500">Billed Customer</div>
+                <div className="font-bold text-slate-900 text-sm mt-0.5">{billSuccessModal.customerName}</div>
+              </div>
+              <div className="p-3 rounded-xl border bg-slate-50/70" style={{ borderColor: T.border }}>
+                <div className="text-[11px] text-slate-500">Grand Total</div>
+                <div className="font-bold text-emerald-700 text-base mt-0.5 font-mono">
+                  {formatCurrency(billSuccessModal.grandTotal)}
+                </div>
+              </div>
+              <div className="p-3 rounded-xl border bg-slate-50/70" style={{ borderColor: T.border }}>
+                <div className="text-[11px] text-slate-500">Payment Mode</div>
+                <div className="font-bold text-slate-900 text-sm mt-0.5">{billSuccessModal.sale?.payment || "Cash"}</div>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl border text-xs" style={{ borderColor: T.border, background: T.blueTint2 }}>
+              <div className="font-bold mb-1.5 flex items-center justify-between" style={{ color: T.navy }}>
+                <span>Line Items ({billSuccessModal.items?.length || 0})</span>
+                <span className="text-[11px] font-normal text-slate-500">GST Compliant</span>
+              </div>
+              <ul className="space-y-1 text-slate-700">
+                {(billSuccessModal.items || []).slice(0, 4).map((it, idx) => (
+                  <li key={idx} className="flex justify-between py-0.5 border-b border-slate-200/50">
+                    <span>{it.qty}x {it.name}</span>
+                    <span className="font-mono font-semibold">{formatCurrency(it.lineTotal)}</span>
+                  </li>
+                ))}
+                {(billSuccessModal.items?.length || 0) > 4 && (
+                  <li className="text-[11px] text-slate-400 italic pt-1">
+                    + {billSuccessModal.items.length - 4} more items included in invoice...
+                  </li>
+                )}
+              </ul>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

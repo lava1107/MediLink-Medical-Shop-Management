@@ -17,6 +17,8 @@ import prescriptionRoutes from "./prescriptionRoutes.js";
 import dashboardRoutes from "./dashboardRoutes.js";
 import reportRoutes from "./reportRoutes.js";
 import notificationRoutes from "./notificationRoutes.js";
+import communicationRoutes from "./communicationRoutes.js";
+import chatRoutes from "./chatRoutes.js";
 import { getBootstrapData } from "../controllers/bootstrapController.js";
 
 const router = Router();
@@ -42,5 +44,8 @@ router.use("/prescriptions", prescriptionRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/reports", reportRoutes);
 router.use("/notifications", notificationRoutes);
+router.use("/communication", communicationRoutes);
+router.use("/chat", chatRoutes);
+
 
 export default router;

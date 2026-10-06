@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LineChart, Line, BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis,
@@ -22,6 +22,8 @@ import StatCard from "../../components/common/StatCard.jsx";
 import StatusBadge from "../../components/common/StatusBadge.jsx";
 import Btn from "../../components/common/Btn.jsx";
 import DrugSafetyModal from "../../components/common/DrugSafetyModal.jsx";
+import BranchTabs from "../../components/common/BranchTabs.jsx";
+import { isBranchAll, matchBranch, cleanBranchName } from "../../utils/branchUtils.js";
 import { PIE_COLORS } from "./dashboardData.js";
 
 export default function AdminDashboard() {
@@ -32,34 +34,33 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const [safetyModalOpen, setSafetyModalOpen] = useState(false);
 
-  const isAll = !currentBranch || currentBranch === "All" || currentBranch === "All Branches";
+  const isAll = isBranchAll(currentBranch);
   const branchList = db.branches && db.branches.length > 0 ? db.branches : BRANCHES;
 
   // Filter batches for selected branch
   const filteredBatches = isAll
     ? (db.batches || [])
-    : (db.batches || []).filter((b) => b.branchName === currentBranch || b.branchId === currentBranch);
+    : (db.batches || []).filter((b) => matchBranch(b.branchName, currentBranch) || matchBranch(b.branchId, currentBranch));
 
   // Filter sales for selected branch
   const filteredSales = isAll
     ? (db.sales || [])
-    : (db.sales || []).filter(
-        (s) => s.branch === currentBranch || (s.branch && currentBranch && s.branch.includes(currentBranch.replace(" Branch", "")))
-      );
+    : (db.sales || []).filter((s) => matchBranch(s.branch, currentBranch));
 
   // Filter purchases for selected branch
   const filteredPurchases = isAll
     ? (db.purchases || [])
-    : (db.purchases || []).filter(
-        (p) => p.branch === currentBranch || (p.branch && currentBranch && p.branch.includes(currentBranch.replace(" Branch", "")))
-      );
+    : (db.purchases || []).filter((p) => matchBranch(p.branch, currentBranch));
 
   // Filter reservations for selected branch
   const filteredReservations = isAll
     ? (db.reservations || [])
-    : (db.reservations || []).filter(
-        (r) => r.branch === currentBranch || (r.branch && currentBranch && r.branch.includes(currentBranch.replace(" Branch", "")))
-      );
+    : (db.reservations || []).filter((r) => matchBranch(r.branch, currentBranch));
+
+  // Filter customers for selected branch
+  const filteredCustomers = isAll
+    ? (db.customers || [])
+    : (db.customers || []).filter((c) => matchBranch(c.branch, currentBranch) || matchBranch(c.city, currentBranch) || matchBranch(c.address, currentBranch));
 
   // Metrics
   const lowStock = filteredBatches.filter((b) => Number(b.available) > 0 && Number(b.available) <= 20).length;
@@ -87,45 +88,135 @@ export default function AdminDashboard() {
     : 0;
 
   // Dynamic Sales Trend data for this branch or all branches
-  const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const salesMultiplier = isAll ? 1 : currentBranch.includes("Kovilpatti") ? 0.42 : currentBranch.includes("Tirunelveli") ? 0.28 : 0.30;
-  const baseWeekSales = [32400, 41200, 38900, 48500, 52100, 61000, 45200];
-  const dynamicSalesTrend = weekDays.map((d, i) => ({
-    name: d,
-    sales: Math.round(baseWeekSales[i] * salesMultiplier),
-  }));
+  const dynamicSalesTrend = useMemo(() => {
+    const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const clean = cleanBranchName(currentBranch);
+    let salesArr = [43400, 52800, 48600, 63700, 69100, 83500, 59600]; // All
+    if (!isAll) {
+      if (clean.includes("kovilpatti")) {
+        salesArr = [18400, 22100, 20500, 26800, 28900, 34200, 25100];
+      } else if (clean.includes("tirunelveli")) {
+        salesArr = [10200, 12800, 11900, 15400, 16800, 21500, 14900];
+      } else {
+        salesArr = [14800, 17900, 16200, 21500, 23400, 27800, 19600];
+      }
+    }
+    return weekDays.map((d, i) => ({ name: d, sales: salesArr[i] }));
+  }, [currentBranch, isAll]);
 
-  // Dynamic branch performance data
-  const branchPerformanceData = isAll
-    ? branchList.map((b) => {
+  // Dynamic branch performance / payment mode data
+  const branchPerformanceData = useMemo(() => {
+    if (isAll) {
+      return branchList.map((b) => {
         const bRev = (db.sales || [])
-          .filter((s) => s.branch === b.name || s.branch?.includes(b.name.replace(" Branch", "")))
+          .filter((s) => matchBranch(s.branch, b.name))
           .reduce((sum, s) => sum + Number(s.amount || 0), 0);
         return {
-          name: b.name.replace(" Branch", ""),
+          name: b.name.replace(/\s+(Branch|HQ)$/i, ""),
           fullName: b.name,
           revenue: bRev || (b.name.includes("Kovilpatti") ? 142300 : b.name.includes("Tirunelveli") ? 98450 : 116200),
         };
-      })
-    : ["Cash", "UPI", "Card"].map((pm, i) => {
-        const pmAmount = filteredSales
-          .filter((s) => s.payment?.toLowerCase() === pm.toLowerCase())
-          .reduce((sum, s) => sum + Number(s.amount || 0), 0);
-        return {
-          name: pm,
-          fullName: `${pm} Payments`,
-          revenue: pmAmount || Math.round(monthlyRevenue * (i === 0 ? 0.5 : i === 1 ? 0.35 : 0.15)),
-        };
       });
+    }
+    const clean = cleanBranchName(currentBranch);
+    const shares = clean.includes("kovilpatti") ? [0.52, 0.33, 0.15] : clean.includes("tirunelveli") ? [0.45, 0.40, 0.15] : [0.38, 0.44, 0.18];
+    return ["Cash", "UPI", "Card"].map((pm, i) => {
+      const pmAmount = filteredSales
+        .filter((s) => s.payment?.toLowerCase() === pm.toLowerCase())
+        .reduce((sum, s) => sum + Number(s.amount || 0), 0);
+      return {
+        name: pm,
+        fullName: `${pm} Payments`,
+        revenue: pmAmount || Math.round((monthlyRevenue || 120000) * shares[i]),
+      };
+    });
+  }, [isAll, branchList, db.sales, filteredSales, currentBranch, monthlyRevenue]);
 
-  // Dynamic Top Selling Medicines
-  const topMedsData = [
-    { name: "Dolo 650", units: Math.round(412 * salesMultiplier) },
-    { name: "Crocin 650", units: Math.round(358 * salesMultiplier) },
-    { name: "Pantoprazole 40mg", units: Math.round(290 * salesMultiplier) },
-    { name: "Azithromycin 500mg", units: Math.round(245 * salesMultiplier) },
-    { name: "Cetirizine 10mg", units: Math.round(198 * salesMultiplier) },
-  ];
+  // Dynamic Monthly Purchases Trend
+  const dynamicPurchasesTrend = useMemo(() => {
+    const clean = cleanBranchName(currentBranch);
+    if (!isAll) {
+      if (clean.includes("kovilpatti")) {
+        return [
+          { name: "Apr", purchase: 75000 },
+          { name: "May", purchase: 92000 },
+          { name: "Jun", purchase: 88000 },
+          { name: "Jul", purchase: 110000 },
+          { name: "Aug", purchase: 98000 },
+        ];
+      } else if (clean.includes("tirunelveli")) {
+        return [
+          { name: "Apr", purchase: 52000 },
+          { name: "May", purchase: 64000 },
+          { name: "Jun", purchase: 61000 },
+          { name: "Jul", purchase: 74000 },
+          { name: "Aug", purchase: 68000 },
+        ];
+      } else {
+        return [
+          { name: "Apr", purchase: 62000 },
+          { name: "May", purchase: 78000 },
+          { name: "Jun", purchase: 72000 },
+          { name: "Jul", purchase: 92000 },
+          { name: "Aug", purchase: 84000 },
+        ];
+      }
+    }
+    return [
+      { name: "Apr", purchase: 189000 },
+      { name: "May", purchase: 234000 },
+      { name: "Jun", purchase: 221000 },
+      { name: "Jul", purchase: 276000 },
+      { name: "Aug", purchase: 250000 },
+    ];
+  }, [currentBranch, isAll]);
+
+  // Dynamic Top Selling Medicines — distinct per city
+  const topMedsData = useMemo(() => {
+    if (isAll) {
+      return [
+        { name: "Dolo 650", units: 480 },
+        { name: "Metformin 500mg", units: 410 },
+        { name: "Azithromycin 500mg", units: 365 },
+        { name: "Pantoprazole 40mg", units: 320 },
+        { name: "Human Mixtard Insulin", units: 290 },
+      ];
+    }
+    const clean = cleanBranchName(currentBranch);
+    if (clean.includes("kovilpatti")) {
+      return [
+        { name: "Dolo 650", units: 245 },
+        { name: "Paracetamol 500mg", units: 210 },
+        { name: "Human Mixtard Insulin", units: 185 },
+        { name: "Cetirizine 10mg", units: 162 },
+        { name: "ORS Powder", units: 138 },
+      ];
+    }
+    if (clean.includes("tirunelveli")) {
+      return [
+        { name: "Azithromycin 500mg", units: 195 },
+        { name: "Pantoprazole 40mg", units: 172 },
+        { name: "Amoxicillin 500mg", units: 148 },
+        { name: "Crocin 650", units: 134 },
+        { name: "Calcium + D3 Tablets", units: 115 },
+      ];
+    }
+    // Madurai
+    return [
+      { name: "Metformin 500mg", units: 270 },
+      { name: "Omeprazole 20mg", units: 225 },
+      { name: "Ascoril Cough Syrup", units: 205 },
+      { name: "Moxifloxacin Eye Drops", units: 180 },
+      { name: "Betadine Ointment", units: 160 },
+    ];
+  }, [currentBranch, isAll]);
+
+  const todayFormatted = new Date().toLocaleDateString("en-IN", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
   return (
     <div>
@@ -135,44 +226,14 @@ export default function AdminDashboard() {
             title="Admin Dashboard"
             subtitle={
               isAll
-                ? "Overview across all branches (Kovilpatti, Tirunelveli, Madurai) · Thursday, 20 August 2026"
-                : `${currentBranch} Operations & Analytics · Thursday, 20 August 2026`
+                ? `Overview across all branches (Kovilpatti, Tirunelveli, Madurai) · ${todayFormatted}`
+                : `${currentBranch} Operations & Analytics · ${todayFormatted}`
             }
           />
         </div>
 
         {/* Quick Branch Switcher Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl border" style={{ borderColor: T.borderSoft }}>
-          <button
-            type="button"
-            onClick={() => setCurrentBranch("All")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              isAll
-                ? "bg-white text-blue-600 shadow-sm border border-slate-200"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            All Branches
-          </button>
-          {branchList.map((b) => {
-            const active = currentBranch === b.name;
-            const shortName = b.name.replace(" Branch", "");
-            return (
-              <button
-                key={b.id}
-                type="button"
-                onClick={() => setCurrentBranch(b.name)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  active
-                    ? "bg-white text-blue-600 shadow-sm border border-slate-200"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                {shortName}
-              </button>
-            );
-          })}
-        </div>
+        <BranchTabs />
       </div>
 
       {/* System Administrator Command Console Banner */}
@@ -218,27 +279,44 @@ export default function AdminDashboard() {
             <KeyRound size={13} className="text-amber-300" />
             Developer REST API
           </button>
-          <button
-            onClick={() => setSafetyModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/30 hover:bg-emerald-500/40 text-emerald-100 text-xs font-semibold transition-colors border border-emerald-400/40"
-          >
-            <ShieldCheck size={13} className="text-emerald-300" />
-            Clinical DDI Engine
-          </button>
         </div>
       </div>
 
       {/* Row 1: Core KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-5">
-        <StatCard icon={Pill} label="Total Medicines" value={db.medicines.length} tone="blue" onClick={() => navigate("/medicines")} />
+        <StatCard
+          icon={Pill}
+          label={isAll ? "Total Medicines" : `Stocked Meds (${currentBranch.replace(/\s+(Branch|HQ)$/i, "")})`}
+          value={isAll ? db.medicines.length : filteredBatches.filter((b) => Number(b.available) > 0).length}
+          tone="blue"
+          onClick={() => navigate("/medicines")}
+        />
         <StatCard icon={Tags} label="Categories" value={db.categories.length} tone="navy" onClick={() => navigate("/categories")} />
-        <StatCard icon={Truck} label="Suppliers" value={db.suppliers.length} tone="blue" onClick={() => navigate("/suppliers")} />
-        <StatCard icon={UserRound} label="Customers" value={db.customers.length} tone="green" onClick={() => navigate("/customers")} />
-        <StatCard icon={Building2} label="Branches" value={db.branches.length} tone="navy" onClick={() => navigate("/branches")} />
+        <StatCard
+          icon={Truck}
+          label={isAll ? "Suppliers (All)" : `Suppliers (${currentBranch.replace(/\s+(Branch|HQ)$/i, "")})`}
+          value={isAll ? db.suppliers.length : ([...new Set(filteredPurchases.map((p) => p.supplier))].length || 2)}
+          tone="blue"
+          onClick={() => navigate("/suppliers")}
+        />
+        <StatCard
+          icon={UserRound}
+          label={isAll ? "Customers (All)" : `Customers (${currentBranch.replace(/\s+(Branch|HQ)$/i, "")})`}
+          value={filteredCustomers.length}
+          tone="green"
+          onClick={() => navigate("/customers")}
+        />
+        <StatCard
+          icon={Building2}
+          label={isAll ? "Branches (All)" : "Active Branch"}
+          value={isAll ? `${db.branches.length} Branches` : currentBranch.replace(/\s+(Branch|HQ)$/i, "")}
+          tone="navy"
+          onClick={() => navigate("/branches")}
+        />
         <StatCard
           icon={ShoppingCart}
-          label={isAll ? "Today's Sales (All)" : `Today's Sales (${currentBranch.replace(" Branch", "")})`}
-          value={formatCurrency(todaySales)}
+          label={isAll ? "Today's Sales (All)" : `Today's Sales (${currentBranch.replace(/\s+(Branch|HQ)$/i, "")})`}
+          value={formatCurrency(todaySales || (isAll ? 2570 : currentBranch.includes("Kovilpatti") ? 1330 : currentBranch.includes("Tirunelveli") ? 630 : 610))}
           tone="green"
           trend={8.2}
           onClick={() => navigate("/reports/daily-sales")}
@@ -358,15 +436,7 @@ export default function AdminDashboard() {
             Purchase Overview — Monthly Trend {isAll ? "(All Branches)" : `(${currentBranch})`}
           </h3>
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart
-              data={[
-                { name: "Apr", purchase: Math.round(180000 * salesMultiplier) },
-                { name: "May", purchase: Math.round(220000 * salesMultiplier) },
-                { name: "Jun", purchase: Math.round(210000 * salesMultiplier) },
-                { name: "Jul", purchase: Math.round(260000 * salesMultiplier) },
-                { name: "Aug", purchase: Math.round(monthlyPurchasesAmount || (240000 * salesMultiplier)) },
-              ]}
-            >
+            <BarChart data={dynamicPurchasesTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke={T.borderSoft} vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9AA6B2" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: "#9AA6B2" }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${v / 1000}k`} />
@@ -645,17 +715,17 @@ export default function AdminDashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <div className="flex items-center gap-1.5 font-bold text-slate-800 mb-1">
-                  <ShieldAlert size={14} className="text-amber-600" />
-                  Clinical DDI Safety
+                  <BellRing size={14} className="text-emerald-600" />
+                  SMS Stock Alerts
                 </div>
                 <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Real-time algorithmic check during POS dispensing that prevents toxic duplicate active ingredients and dangerous antibiotic chelation.
+                  FIFO queue allocation and automated SMS customer dispatches with real-time reservation notifications when medicines arrive in stock.
                 </p>
                 <button
-                  onClick={() => setSafetyModalOpen(true)}
+                  onClick={() => navigate("/reservations")}
                   className="mt-2 text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1"
                 >
-                  Test DDI Simulator <ArrowRight size={10} />
+                  View Reservations <ArrowRight size={10} />
                 </button>
               </div>
 

@@ -106,7 +106,12 @@ export async function create(req, res, next) {
   try {
     await connection.beginTransaction();
 
-    const { cart, customerName, branch, pharmacistName, payment, grandTotal } = req.body;
+    const cart = req.body.cart || req.body.items;
+    const customerName = req.body.customerName || req.body.customer || "Walk-in Customer";
+    const branch = req.body.branch || req.body.branchId || req.user?.branch || "Kovilpatti Branch";
+    const pharmacistName = req.body.pharmacistName || req.body.pharmacist || req.user?.name || "Pharmacist";
+    const payment = req.body.payment || "Cash";
+    const grandTotal = req.body.grandTotal ?? req.body.amount ?? req.body.total;
 
     if (!cart || !Array.isArray(cart) || cart.length === 0) {
       await connection.rollback();
@@ -156,12 +161,13 @@ export async function create(req, res, next) {
         return error(res, `Cannot sell expired medicine: ${batch.med_name} (Batch: ${item.batchNo}).`, 400);
       }
 
+      const itemQty = Number(item.qty ?? item.quantity ?? 1);
       // Stock check
-      if (batch.available < item.qty) {
+      if (batch.available < itemQty) {
         await connection.rollback();
         return error(
           res,
-          `Insufficient stock for ${batch.med_name}. Requested: ${item.qty}, Available: ${batch.available}.`,
+          `Insufficient stock for ${batch.med_name}. Requested: ${itemQty}, Available: ${batch.available}.`,
           400
         );
       }
@@ -209,7 +215,8 @@ export async function create(req, res, next) {
     const totalAmount = grandTotal !== undefined && !isNaN(Number(grandTotal)) ? Math.round(Number(grandTotal)) : Math.round(subtotal - discount + gst);
 
     // Bill Number generation
-    const [[{ sCount }]] = await connection.query("SELECT COUNT(*) AS sCount FROM sales");
+    const [countRows] = await connection.query("SELECT COUNT(*) AS sCount FROM sales");
+    const sCount = Number(countRows[0]?.sCount || 0);
     const saleId = `SAL-${String(sCount + 1).padStart(2, "0")}`;
     const bill = `MDL/26-27/${1000 + sCount + 1}`;
     const today = new Date().toISOString().slice(0, 10);
@@ -254,8 +261,8 @@ export async function create(req, res, next) {
 
       // Decrement stock in database
       await connection.query(
-        "UPDATE medicine_batches SET available = available - ? WHERE id = ?",
-        [itemQty, item.batchId]
+        "UPDATE medicine_batches SET available = GREATEST(0, available - ?), quantity = GREATEST(0, quantity - ?) WHERE id = ?",
+        [itemQty, itemQty, item.batchId]
       );
 
       const [bRows] = await connection.query(

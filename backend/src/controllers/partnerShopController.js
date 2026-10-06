@@ -162,13 +162,133 @@ export async function getPartnerMedicines(req, res, next) {
   try {
     const rows = await query(
       `SELECT psm.id, psm.partner_shop_id AS shopId, psm.medicine_name AS medicineName,
-              psm.quantity, psm.last_updated AS lastUpdated,
+              psm.quantity, CAST(COALESCE(psm.price, 0) AS DOUBLE) AS price,
+              psm.last_updated AS lastUpdated,
               ps.name AS shopName
        FROM partner_shop_medicines psm
        JOIN partner_medical_shops ps ON psm.partner_shop_id = ps.id
        ORDER BY ps.name ASC, psm.medicine_name ASC`
     );
     return success(res, rows);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getShopMedicines(req, res, next) {
+  try {
+    const { id } = req.params;
+    const medicines = await query(
+      `SELECT psm.id, psm.partner_shop_id AS shopId, psm.medicine_id AS medicineId,
+              psm.medicine_name AS medicineName, psm.quantity,
+              CAST(COALESCE(psm.price, m.selling_price, 0) AS DOUBLE) AS price,
+              psm.last_updated AS lastUpdated,
+              COALESCE(m.generic, 'Generic Formula') AS generic,
+              COALESCE(m.dosage, 'Standard') AS dosage,
+              COALESCE(m.type, 'OTC') AS type,
+              COALESCE(m.brand, 'Standard Brand') AS brand,
+              COALESCE(c.name, 'General') AS category
+       FROM partner_shop_medicines psm
+       LEFT JOIN medicines m ON psm.medicine_id = m.id
+       LEFT JOIN categories c ON m.category_id = c.id
+       WHERE psm.partner_shop_id = ?
+       ORDER BY psm.medicine_name ASC`,
+      [id]
+    );
+    return success(res, medicines);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function addShopMedicine(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { medicineName, medicineId, quantity, price } = req.body;
+    if (!medicineName) {
+      return error(res, "Medicine name is required.", 400);
+    }
+    const now = new Date();
+    const lastUpdated =
+      now.toISOString().slice(0, 10) +
+      " " +
+      now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    let resolvedMedId = medicineId || null;
+    if (resolvedMedId) {
+      const medCheck = await query("SELECT id FROM medicines WHERE id = ?", [resolvedMedId]);
+      if (medCheck.length === 0) resolvedMedId = null;
+    }
+
+    const result = await query(
+      `INSERT INTO partner_shop_medicines (partner_shop_id, medicine_id, medicine_name, quantity, price, last_updated)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, resolvedMedId, medicineName, Number(quantity) || 0, Number(price) || 0, lastUpdated]
+    );
+
+    const [created] = await query(
+      `SELECT psm.id, psm.partner_shop_id AS shopId, psm.medicine_id AS medicineId,
+              psm.medicine_name AS medicineName, psm.quantity,
+              CAST(psm.price AS DOUBLE) AS price, psm.last_updated AS lastUpdated
+       FROM partner_shop_medicines psm WHERE psm.id = ?`,
+      [result.insertId]
+    );
+
+    return success(res, created, "Medicine added to partner shop successfully", 201);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateShopMedicine(req, res, next) {
+  try {
+    const { id, medId } = req.params;
+    const { quantity, price, medicineName } = req.body;
+    const now = new Date();
+    const lastUpdated =
+      now.toISOString().slice(0, 10) +
+      " " +
+      now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    await query(
+      `UPDATE partner_shop_medicines
+       SET quantity = COALESCE(?, quantity),
+           price = COALESCE(?, price),
+           medicine_name = COALESCE(?, medicine_name),
+           last_updated = ?
+       WHERE id = ? AND partner_shop_id = ?`,
+      [
+        quantity !== undefined ? Number(quantity) : null,
+        price !== undefined ? Number(price) : null,
+        medicineName || null,
+        lastUpdated,
+        medId,
+        id,
+      ]
+    );
+
+    const [updated] = await query(
+      `SELECT psm.id, psm.partner_shop_id AS shopId, psm.medicine_id AS medicineId,
+              psm.medicine_name AS medicineName, psm.quantity,
+              CAST(psm.price AS DOUBLE) AS price, psm.last_updated AS lastUpdated
+       FROM partner_shop_medicines psm WHERE psm.id = ?`,
+      [medId]
+    );
+
+    return success(res, updated, "Partner medicine stock updated");
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function deleteShopMedicine(req, res, next) {
+  try {
+    const { id, medId } = req.params;
+    await query("DELETE FROM partner_shop_medicines WHERE id = ? AND partner_shop_id = ?", [
+      medId,
+      id,
+    ]);
+    return success(res, { id: medId }, "Medicine removed from partner shop");
   } catch (err) {
     next(err);
   }

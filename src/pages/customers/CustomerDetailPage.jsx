@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Receipt, ShoppingCart, Pencil } from "lucide-react";
+import { ArrowLeft, Receipt, ShoppingCart, Pencil, Mail, MessageSquare } from "lucide-react";
 import { T } from "../../utils/theme.js";
 import { formatCurrency, formatDate } from "../../utils/format.js";
 import { useApp } from "../../hooks/useApp.js";
@@ -117,9 +117,39 @@ export default function CustomerDetailPage() {
         subtitle={c.phone}
         crumbs={["MediLink", "Customers", c.name]}
         action={
-          <Btn icon={Pencil} size="sm" onClick={openEdit}>
-            Edit Customer
-          </Btn>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Btn
+              icon={Mail}
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                navigate(
+                  `/communication?type=email&to=${encodeURIComponent(
+                    c.email || `${c.name.toLowerCase().replace(/\s+/g, ".")}@example.com`
+                  )}&name=${encodeURIComponent(c.name)}`
+                )
+              }
+            >
+              Send Email
+            </Btn>
+            <Btn
+              icon={MessageSquare}
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                navigate(
+                  `/communication?type=sms&phone=${encodeURIComponent(c.phone || "")}&name=${encodeURIComponent(
+                    c.name
+                  )}`
+                )
+              }
+            >
+              Send SMS
+            </Btn>
+            <Btn icon={Pencil} size="sm" onClick={openEdit}>
+              Edit Customer
+            </Btn>
+          </div>
         }
       />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">

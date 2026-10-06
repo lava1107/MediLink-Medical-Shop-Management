@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ClipboardList, CircleAlert, Pencil } from "lucide-react";
+import { ArrowLeft, ClipboardList, CircleAlert, Pencil, Mail, MessageSquare } from "lucide-react";
 import { T } from "../../utils/theme.js";
 import { formatCurrency, formatDate } from "../../utils/format.js";
 import { useApp } from "../../hooks/useApp.js";
@@ -104,8 +104,36 @@ export default function SupplierDetailPage() {
         subtitle={s.company}
         crumbs={["MediLink", "Suppliers", s.name]}
         action={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <StatusBadge status={s.status} />
+            <Btn
+              icon={Mail}
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                navigate(
+                  `/communication?type=email&to=${encodeURIComponent(
+                    s.email || `${s.name.toLowerCase().replace(/\s+/g, ".")}@pharma.com`
+                  )}&name=${encodeURIComponent(s.name)}`
+                )
+              }
+            >
+              Email PO
+            </Btn>
+            <Btn
+              icon={MessageSquare}
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                navigate(
+                  `/communication?type=sms&phone=${encodeURIComponent(s.phone || "")}&name=${encodeURIComponent(
+                    s.name
+                  )}`
+                )
+              }
+            >
+              SMS Order
+            </Btn>
             <Btn icon={Pencil} size="sm" onClick={openEdit}>
               Edit Supplier
             </Btn>

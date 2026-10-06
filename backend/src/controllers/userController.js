@@ -98,16 +98,18 @@ export async function update(req, res, next) {
     }
 
     let roleId = null;
-    if (role) {
+    if (role && req.user?.role === "Admin") {
       const roleRows = await query("SELECT id FROM roles WHERE LOWER(name) = LOWER(?)", [role]);
       if (roleRows.length > 0) roleId = roleRows[0].id;
     }
 
     let branchId = null;
-    if (branch) {
+    if (branch && req.user?.role === "Admin") {
       const branchRows = await query("SELECT id FROM branches WHERE LOWER(name) = LOWER(?) OR id = ?", [branch, branch]);
       if (branchRows.length > 0) branchId = branchRows[0].id;
     }
+
+    const newStatus = req.user?.role === "Admin" ? (status ?? null) : null;
 
     let passwordHash = null;
     if (password && password.trim() !== "") {
@@ -125,7 +127,7 @@ export async function update(req, res, next) {
            status = COALESCE(?, status),
            password_hash = COALESCE(?, password_hash)
        WHERE id = ?`,
-      [name ?? null, username ?? null, email ?? null, phone ?? null, roleId ?? null, branchId ?? null, status ?? null, passwordHash ?? null, id]
+      [name ?? null, username ?? null, email ?? null, phone ?? null, roleId ?? null, branchId ?? null, newStatus, passwordHash ?? null, id]
     );
 
     const [updated] = await query(

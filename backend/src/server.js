@@ -78,6 +78,13 @@ app.listen(PORT, async () => {
   const dbStatus = await testConnection();
   if (dbStatus.success) {
     console.log("[Database] MySQL connected successfully.");
+    try {
+      const { initCommunicationTables } = await import("./services/communicationService.js");
+      await initCommunicationTables();
+      console.log("[Communication] Real Email & SMS communication tables initialized.");
+    } catch (e) {
+      console.warn("[Communication] Table init warning:", e.message);
+    }
   } else {
     console.warn(`[Database Warning] Could not connect to MySQL: ${dbStatus.error}`);
     console.warn("Ensure MySQL is running and DB_PASSWORD in backend/.env is correct.");

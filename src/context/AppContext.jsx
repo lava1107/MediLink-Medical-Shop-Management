@@ -11,6 +11,7 @@ import {
   PURCHASES,
   RESERVATIONS,
   PARTNER_SHOPS,
+  PARTNER_AVAILABILITY,
   NOTIFICATIONS,
   PRESCRIPTIONS,
 } from "../data/mockData.js";
@@ -19,8 +20,8 @@ import { api } from "../services/api.js";
 
 export const AppContext = createContext(null);
 
-const DB_KEY = "db_v1";
-const NOTIFICATIONS_KEY = "notifications_v1";
+const DB_KEY = "db_v2";
+const NOTIFICATIONS_KEY = "notifications_v2";
 
 const SEED_DB = {
   branches: BRANCHES,
@@ -34,7 +35,7 @@ const SEED_DB = {
   purchases: PURCHASES,
   reservations: RESERVATIONS,
   partnerShops: PARTNER_SHOPS,
-  partnerAvailability: [],
+  partnerAvailability: PARTNER_AVAILABILITY,
   prescriptions: PRESCRIPTIONS,
 };
 

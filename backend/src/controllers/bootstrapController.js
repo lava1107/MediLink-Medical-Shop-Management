@@ -88,12 +88,18 @@ export async function getBootstrapData(req, res, next) {
         ORDER BY p.purchase_date DESC, p.id DESC
       `),
       query(`
-        SELECT r.id, r.customer_name AS customer, r.medicine_name AS medicine,
-               r.branch_name AS branch, r.quantity,
+        SELECT r.id, r.customer_name AS customer,
+               COALESCE(r.customer_phone, c.phone, '') AS phone,
+               COALESCE(r.customer_phone, c.phone, '') AS customerPhone,
+               r.customer_id AS customerId,
+               r.medicine_name AS medicine, r.medicine_id AS medicineId,
+               r.branch_name AS branch, r.branch_id AS branchId,
+               r.quantity,
                DATE_FORMAT(r.res_date, '%Y-%m-%d') AS resDate,
                DATE_FORMAT(r.expiry, '%Y-%m-%d') AS expiry,
                r.status, r.created_by AS createdBy
         FROM reservations r
+        LEFT JOIN customers c ON r.customer_id = c.id
         ORDER BY r.res_date DESC, r.id DESC
       `),
       query(`
@@ -103,8 +109,10 @@ export async function getBootstrapData(req, res, next) {
         FROM partner_medical_shops ORDER BY id ASC
       `),
       query(`
-        SELECT psm.partner_shop_id AS shopId, psm.medicine_name AS medicineName,
-               psm.quantity, psm.last_updated AS lastUpdated
+        SELECT psm.id, psm.partner_shop_id AS shopId, psm.medicine_id AS medicineId,
+               psm.medicine_name AS medicineName,
+               psm.quantity, CAST(COALESCE(psm.price, 0) AS DOUBLE) AS price,
+               psm.last_updated AS lastUpdated
         FROM partner_shop_medicines psm
       `),
       query(`

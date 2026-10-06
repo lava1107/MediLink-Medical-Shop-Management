@@ -4,7 +4,10 @@ import { success, error } from "../utils/response.js";
 
 export async function checkAvailability(req, res, next) {
   try {
-    const { query: searchQuery, branchName, branchRadius = 25, partnerRadius = 5 } = req.query;
+    const searchQuery = req.query.query || req.query.medicine || req.query.q;
+    const branchName = req.query.branchName || req.query.branch || req.query.branchId;
+    const branchRadius = req.query.branchRadius || req.query.radius || 25;
+    const partnerRadius = req.query.partnerRadius || 5;
 
     if (!searchQuery || !searchQuery.trim()) {
       return error(res, "Search query is required.", 400);
